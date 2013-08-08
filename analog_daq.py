@@ -5,6 +5,7 @@ import struct
 import numpy as np
 import math
 
+from gi.repository import Gtk, GObject
 
 DEVICE = "/dev/comedi0"
 SUBDEVICE = 0
@@ -179,6 +180,67 @@ def print_cmd(cmd):
 	print "---------------------------"
 
 
+class ChessAnalogWindow(Gtk.Window):
+    def __init__(self):
+        Gtk.Window.__init__(self, title="CHESS Analog")
+
+        self.dev = None
+
+        self.connect("destroy", self.on_destroy)
+
+        # Initialize the DAQ card
+        if (self.pci_6033e_init(DEVICE) < 0):
+            warn_dialog("Could not initialize comedi device -- closing")
+            # Quit if we can't get the daq...
+            Gtk.main_quit()
+        
+
+    def pci_6033e_init(self, dev_name):
+        self.dev = c.comedi_open(dev_name)
+        if not(self.dev):
+            self.warn_dialog("Unable to open device: " + dev_name)
+            return(-1)
+
+        ret = c.comedi_lock(self.dev, SUBDEVICE)
+        if (ret < 0):
+            self.warn_dialog("Could not lock comedi device")
+            return(-1)
+
+        # get a file-descriptor for use later
+        self.fd = c.comedi_fileno(self.dev)
+        if (self.fd <= 0): 
+            self.warn_dialog("Error obtaining Comedi device file descriptor")
+            c.comedi_close(self.dev)
+            return(-1)
+
+        return(0)
+
+    # Die gracefully...
+    def on_destroy(self, widget):
+        if (self.dev):
+            c.comedi_close(self.dev)
+            print("Comedi device closed...")
+        Gtk.main_quit()
+
+    # Oy! 
+    def warn_dialog(self, message):
+        dialog = Gtk.MessageDialog(self, 0, Gtk.MessageType.WARNING,
+                                   Gtk.ButtonsType.OK, "OHNOES!")
+        dialog.format_secondary_text(message)
+        response = dialog.run()
+
+        # if response == Gtk.ResponseType.OK:
+        #     print "WARN dialog closed by clicking OK button"
+
+        dialog.destroy()
+
+
 if __name__ == '__main__':
     # args: device, # of channels
-    main(DEVICE, 32)
+    #main(DEVICE, 32)
+
+    
+    win = ChessAnalogWindow()
+    win.connect("delete-event", Gtk.main_quit)
+    win.show_all()
+    Gtk.main()
