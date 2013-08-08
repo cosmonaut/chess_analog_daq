@@ -20,6 +20,15 @@ CHAN_RANGE = 8
 NUM_CHANNELS = 32
 
 
+UI_INFO = """
+<ui>
+  <toolbar name='ToolBar'>
+    <toolitem action='Acquire' />
+  </toolbar>
+</ui>
+"""
+
+
 def main(dev_name, num_chans):
     dev = c.comedi_open(dev_name)
     if not(dev):
@@ -199,10 +208,27 @@ class ChessAnalogWindow(Gtk.Window):
         print("Comedi device successfully initialized \n\n")
 
         self.master_vbox = Gtk.Box(spacing = 2, orientation = 'vertical')
-        self.master_hbox = Gtk.Box(spacing = 2, orientation = 'vertical')
+        self.master_hbox = Gtk.Box(spacing = 2)
 
-        self.master_vbox.pack_start(self.master_hbox, True, True, 0)
+        #self.master_vbox.pack_start(self.master_hbox, True, True, 0)
         self.add(self.master_vbox)
+
+        self.action_acq = Gtk.ToggleAction("Acquire", "Acquire", "Get the datas", None)
+        self.action_acq.connect("toggled", self.acquire_cb)
+
+        toolbar_action_group = Gtk.ActionGroup("toolbar_actions")
+        toolbar_action_group.add_action(self.action_acq)
+
+        # UI Stuff
+        uimanager = Gtk.UIManager()
+
+        # Throws exception if something went wrong
+        uimanager.add_ui_from_string(UI_INFO)
+        uimanager.insert_action_group(toolbar_action_group)
+        
+        toolbar = uimanager.get_widget("/ToolBar")
+        self.master_vbox.pack_start(toolbar, False, False, 0)
+
 
         self.liststore = Gtk.ListStore(str, int)
         for i in range(32):
@@ -218,11 +244,24 @@ class ChessAnalogWindow(Gtk.Window):
         mcolumn_text = Gtk.TreeViewColumn("Measurement", meas_text, text=1)
         treeview.append_column(mcolumn_text)
 
+        self.master_vbox.pack_start(self.master_hbox, True, True, 0)
         #self.add(treeview)
         self.master_hbox.pack_start(treeview, False, False, 0)
 
         #self.liststore[31][1] = 18000
         #GObject.timeout_add(200, self.my_timer)
+        self.timer_id = None
+
+    def acquire_cb(self, state):
+        print("acq callback")
+        print(state)
+        if (self.action_acq.get_active()):
+            self.timer_id = GObject.timeout_add(200, self.my_timer)
+            self.action_acq.set_label("Halt")
+        else:
+            self.action_acq.set_label("Acquire")
+            if (self.timer_id):
+                GObject.source_remove(self.timer_id)
 
     def my_timer(self):
         #print("BUMP")
