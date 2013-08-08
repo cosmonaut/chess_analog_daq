@@ -184,6 +184,7 @@ def print_cmd(cmd):
 class ChessAnalogWindow(Gtk.Window):
     def __init__(self):
         Gtk.Window.__init__(self, title="CHESS Analog")
+        self.set_default_size(800, 600)
 
         self.dev = None
 
@@ -196,7 +197,39 @@ class ChessAnalogWindow(Gtk.Window):
             Gtk.main_quit()
         
         print("Comedi device successfully initialized \n\n")
+
+        self.master_vbox = Gtk.Box(spacing = 2, orientation = 'vertical')
+        self.master_hbox = Gtk.Box(spacing = 2, orientation = 'vertical')
+
+        self.master_vbox.pack_start(self.master_hbox, True, True, 0)
+        self.add(self.master_vbox)
+
+        self.liststore = Gtk.ListStore(str, int)
+        for i in range(32):
+            self.liststore.append([str(i), 0])
+
+        treeview = Gtk.TreeView(model=self.liststore)
         
+        chan_text = Gtk.CellRendererText()
+        column_text = Gtk.TreeViewColumn("Channel", chan_text, text=0)
+        treeview.append_column(column_text)
+
+        meas_text = Gtk.CellRendererText()
+        mcolumn_text = Gtk.TreeViewColumn("Measurement", meas_text, text=1)
+        treeview.append_column(mcolumn_text)
+
+        #self.add(treeview)
+        self.master_hbox.pack_start(treeview, False, False, 0)
+
+        #self.liststore[31][1] = 18000
+        #GObject.timeout_add(200, self.my_timer)
+
+    def my_timer(self):
+        #print("BUMP")
+        for i in range(32):
+            self.liststore[i][1] += 1
+            self.liststore[i][1] = self.liststore[i][1] % 65535
+        return(True)
 
     def pci_6033e_init(self, dev_name):
         self.dev = c.comedi_open(dev_name)
