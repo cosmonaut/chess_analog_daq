@@ -17,6 +17,7 @@ SCAN_FREQ = 1000
 WORD_SIZE = 2
 # Channel we want to use for 0-5 V
 CHAN_RANGE = 8
+NUM_CHANNELS = 32
 
 
 def main(dev_name, num_chans):
@@ -194,6 +195,8 @@ class ChessAnalogWindow(Gtk.Window):
             # Quit if we can't get the daq...
             Gtk.main_quit()
         
+        print("Comedi device successfully initialized \n\n")
+        
 
     def pci_6033e_init(self, dev_name):
         self.dev = c.comedi_open(dev_name)
@@ -212,6 +215,66 @@ class ChessAnalogWindow(Gtk.Window):
             self.warn_dialog("Error obtaining Comedi device file descriptor")
             c.comedi_close(self.dev)
             return(-1)
+
+        # Channel range (0-5V)
+        if (c.comedi_range_is_chan_specific(self.dev, SUBDEVICE) != 0):
+            self.warn_dialog("Comedi range is channel specific!")
+            c.comedi_close(self.dev)
+            return(-1)
+
+        comedi_range = c.comedi_get_range(self.dev, SUBDEVICE, 0, CHAN_RANGE)
+        comedi_maxdata = c.comedi_get_maxdata(self.dev, SUBDEVICE, 0)
+
+        board_name = c.comedi_get_board_name(self.dev)
+        if (board_name != "pci-6033e"):
+            print("Opened wrong device!")
+        
+        # Prepare channels, gains, refs
+        num_chans = NUM_CHANNELS
+        chans = range(num_chans)
+        gains = [0]*num_chans
+        aref = [c.AREF_GROUND]*num_chans
+
+        chan_list = c.chanlist(num_chans)
+
+        # Configure all the channels!
+        for i in range(num_chans):
+            chan_list[i] = c.cr_pack(chans[i], gains[i], aref[i])
+
+        # The comedi command
+        cmd = c.comedi_cmd_struct()
+
+        # 1.0e9 because this number is in nanoseconds for some reason
+        period = int(1.0e9/float(SCAN_FREQ))
+
+        # Init cmd
+        ret = c.comedi_get_cmd_generic_timed(self.dev, SUBDEVICE, cmd, num_chans, period)
+        if (ret):
+            self.warn_dialog("Could not initiate command")
+            c.comedi_close(self.dev)
+            return(-1)
+
+        # Populate command 
+        cmd.chanlist = chan_list
+        cmd.chanlist_len = num_chans
+        cmd.scan_end_arg = num_chans
+        cmd.stop_src = c.TRIG_COUNT
+        # TODO, short runs for now...
+        cmd.stop_arg = 10
+
+        #print("real timing: %d ns" % cmd.convert_arg)
+        #print("period: %d ns" % period)
+    
+        print_cmd(cmd)
+
+        # Test command out.
+        ret = c.comedi_command_test(self.dev, cmd)
+        if (ret < 0):
+            self.warn_dialog("Comedi command test failed!")
+            c.comedi_close(self.dev)
+            return(-1)
+
+        print("Command test passed")
 
         return(0)
 
