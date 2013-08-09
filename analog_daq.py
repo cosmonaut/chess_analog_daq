@@ -13,7 +13,7 @@ SUBDEVICE = 0
 # Buffer for reading the file device.
 BUF_SIZE = 10000
 # Scans of all 32 channels per second
-SCAN_FREQ = 100
+SCAN_FREQ = 1000
 # 2 bytes per word
 WORD_SIZE = 2
 # Channel we want to use for 0-5 V
@@ -30,148 +30,148 @@ UI_INFO = """
 """
 
 
-def main(dev_name, num_chans):
-    dev = c.comedi_open(dev_name)
-    if not(dev):
-        raise Exception("Unable to open device: " + dev_name)
+# def main(dev_name, num_chans):
+#     dev = c.comedi_open(dev_name)
+#     if not(dev):
+#         raise Exception("Unable to open device: " + dev_name)
 
-    # get a file-descriptor for use later
-    fd = c.comedi_fileno(dev)
-    if (fd <= 0): 
-        raise Exception("Error obtaining Comedi device file descriptor")
+#     # get a file-descriptor for use later
+#     fd = c.comedi_fileno(dev)
+#     if (fd <= 0): 
+#         raise Exception("Error obtaining Comedi device file descriptor")
 
-    crange = c.comedi_get_range(dev, SUBDEVICE, 0, CHAN_RANGE)
-    maxdata = c.comedi_get_maxdata(dev, SUBDEVICE, 0)
+#     crange = c.comedi_get_range(dev, SUBDEVICE, 0, CHAN_RANGE)
+#     maxdata = c.comedi_get_maxdata(dev, SUBDEVICE, 0)
 
-    board_name = c.comedi_get_board_name(dev)
-    if (board_name != "pci-6033e"):
-        print("Opened wrong device!")
+#     board_name = c.comedi_get_board_name(dev)
+#     if (board_name != "pci-6033e"):
+#         print("Opened wrong device!")
     
-    # Prepare channels, gains, refs
-    chans = range(num_chans)
-    gains = [0]*num_chans
-    aref = [c.AREF_GROUND]*num_chans
+#     # Prepare channels, gains, refs
+#     chans = range(num_chans)
+#     gains = [0]*num_chans
+#     aref = [c.AREF_GROUND]*num_chans
 
-    chan_list = c.chanlist(num_chans)
+#     chan_list = c.chanlist(num_chans)
 
-    # Configure all the channels!
-    for i in range(num_chans):
-        chan_list[i] = c.cr_pack(chans[i], gains[i], aref[i])
+#     # Configure all the channels!
+#     for i in range(num_chans):
+#         chan_list[i] = c.cr_pack(chans[i], gains[i], aref[i])
 
-    # The comedi command
-    cmd = c.comedi_cmd_struct()
+#     # The comedi command
+#     cmd = c.comedi_cmd_struct()
 
-    # 1.0e9 because this number is in nanoseconds for some reason
-    period = int(1.0e9/float(SCAN_FREQ))
+#     # 1.0e9 because this number is in nanoseconds for some reason
+#     period = int(1.0e9/float(SCAN_FREQ))
 
-    # Init cmd
-    ret = c.comedi_get_cmd_generic_timed(dev, SUBDEVICE, cmd, num_chans, period)
-    if (ret):
-        raise Exception("Could not initiate command")
+#     # Init cmd
+#     ret = c.comedi_get_cmd_generic_timed(dev, SUBDEVICE, cmd, num_chans, period)
+#     if (ret):
+#         raise Exception("Could not initiate command")
 
-    # Populate command 
-    cmd.chanlist = chan_list
-    cmd.chanlist_len = num_chans
-    cmd.scan_end_arg = num_chans
-    cmd.stop_src = c.TRIG_COUNT
-    # TODO, short runs for now...
-    cmd.stop_arg = 10
+#     # Populate command 
+#     cmd.chanlist = chan_list
+#     cmd.chanlist_len = num_chans
+#     cmd.scan_end_arg = num_chans
+#     cmd.stop_src = c.TRIG_COUNT
+#     # TODO, short runs for now...
+#     cmd.stop_arg = 10
 
-    #print("real timing: %d ns" % cmd.convert_arg)
-    #print("period: %d ns" % period)
+#     #print("real timing: %d ns" % cmd.convert_arg)
+#     #print("period: %d ns" % period)
     
-    print_cmd(cmd)
+#     print_cmd(cmd)
 
-    # Test command out.
-    ret = c.comedi_command_test(dev, cmd)
-    if (ret < 0):
-        raise Exception("Command test failed!")
+#     # Test command out.
+#     ret = c.comedi_command_test(dev, cmd)
+#     if (ret < 0):
+#         raise Exception("Command test failed!")
 
-    print("Command test passed")
+#     print("Command test passed")
 
-    # Run the command
-    ret = c.comedi_command(dev, cmd)
-    if (ret != 0):
-        raise Exception("command run failed")
+#     # Run the command
+#     ret = c.comedi_command(dev, cmd)
+#     if (ret != 0):
+#         raise Exception("command run failed")
 
-    datastr = ()
-    l = []
-    data = ""
-    payload = ""
-    bytes_read = 0
-    num_reads = 0
+#     datastr = ()
+#     l = []
+#     data = ""
+#     payload = ""
+#     bytes_read = 0
+#     num_reads = 0
 
-    datal = []    
-    #format = `n`+'H'
-    format = '32H'
+#     datal = []    
+#     #format = `n`+'H'
+#     format = '32H'
     
-    # Get the data.
-    while (1):
-        # ret = c.comedi_poll(dev, 0)
-        # if (ret < 0):
-        #     print("comedi poll fail: %d" % ret)
-        ret = select.select([fd], [], [], 0.05)
-        #print(ret[0])
-        if (len(ret[0]) == 0):
-            cret = c.comedi_poll(dev, SUBDEVICE)
-            if (cret < 0):
-                print("comedi poll fail: %d" % ret)
-        else:
+#     # Get the data.
+#     while (1):
+#         # ret = c.comedi_poll(dev, 0)
+#         # if (ret < 0):
+#         #     print("comedi poll fail: %d" % ret)
+#         ret = select.select([fd], [], [], 0.05)
+#         #print(ret[0])
+#         if (len(ret[0]) == 0):
+#             cret = c.comedi_poll(dev, SUBDEVICE)
+#             if (cret < 0):
+#                 print("comedi poll fail: %d" % ret)
+#         else:
             
-            data = os.read(fd, BUF_SIZE)
-        #print(data)
+#             data = os.read(fd, BUF_SIZE)
+#         #print(data)
 
-        if (len(data) > 0):
-            bytes_read += len(data)
-            print("Read %d bytes" % len(data))
-            #print("total read: %d" % bytes_read)
-            r = math.floor(len(data)/(num_chans*WORD_SIZE))
-            print(r)
-            for i in range(int(r)):
-                #for j in range(num_chans):
-                    #print(len(data))
-                print(len(data[64*i:64*(i+1)]))
-                datastr = datastr + struct.unpack(format, data[64*i:64*(i+1)])
-                # for j in datastr:
-                #     datal.append(c.comedi_to_phys(j, crange, maxdata))
-                print(datastr)
-                #print(datal)
-                datastr = ()
-                #datal = []
-            payload += data
-            num_reads += 1
-        if (bytes_read >= 640):
-                break
+#         if (len(data) > 0):
+#             bytes_read += len(data)
+#             print("Read %d bytes" % len(data))
+#             #print("total read: %d" % bytes_read)
+#             r = math.floor(len(data)/(num_chans*WORD_SIZE))
+#             print(r)
+#             for i in range(int(r)):
+#                 #for j in range(num_chans):
+#                     #print(len(data))
+#                 print(len(data[64*i:64*(i+1)]))
+#                 datastr = datastr + struct.unpack(format, data[64*i:64*(i+1)])
+#                 # for j in datastr:
+#                 #     datal.append(c.comedi_to_phys(j, crange, maxdata))
+#                 print(datastr)
+#                 #print(datal)
+#                 datastr = ()
+#                 #datal = []
+#             payload += data
+#             num_reads += 1
+#         if (bytes_read >= 640):
+#                 break
 
-            # print(type(data))
-            # if (len(data) == 0):
-            #     break
-            # n = len(data)/2 # 2 bytes per 'H'
-            # print(n)
-            # format = `n`+'H'
-            # #print(struct.unpack(format,data))
-            # datastr = datastr + struct.unpack(format,data)
-            # print(datastr)
+#             # print(type(data))
+#             # if (len(data) == 0):
+#             #     break
+#             # n = len(data)/2 # 2 bytes per 'H'
+#             # print(n)
+#             # format = `n`+'H'
+#             # #print(struct.unpack(format,data))
+#             # datastr = datastr + struct.unpack(format,data)
+#             # print(datastr)
 
-    #print("payload: " + payload)
-    print("payload len: %d" % len(payload))
-    print("number of reads: %d" % num_reads)
-    # print("data: ")
-    # print("data len: %d" % len(datastr))
-    # print(datastr)
-    # print(type(datastr[0]))
+#     #print("payload: " + payload)
+#     print("payload len: %d" % len(payload))
+#     print("number of reads: %d" % num_reads)
+#     # print("data: ")
+#     # print("data len: %d" % len(datastr))
+#     # print(datastr)
+#     # print(type(datastr[0]))
 
-    # print(maxdata)
-    # for i in range(255):
-    #     print(("%d  " % i) +  str(c.comedi_to_phys(i, crange, maxdata)))
+#     # print(maxdata)
+#     # for i in range(255):
+#     #     print(("%d  " % i) +  str(c.comedi_to_phys(i, crange, maxdata)))
     
-    # blah = os.read(fd, BUF_SIZE)
-    # print("blah")
-    # print(len(blah))
+#     # blah = os.read(fd, BUF_SIZE)
+#     # print("blah")
+#     # print(len(blah))
     
-    ret = c.comedi_close(dev)
-    if (ret != 0):
-        raise Exception("comedi_close failed...")
+#     ret = c.comedi_close(dev)
+#     if (ret != 0):
+#         raise Exception("comedi_close failed...")
 
 
 def print_cmd(cmd):
@@ -197,6 +197,16 @@ class ChessAnalogWindow(Gtk.Window):
         self.set_default_size(800, 600)
 
         self.dev = None
+        # number of plot points to plot at any one time.
+        self.fifo_size = 200
+        # Buffer for plot data
+        self.analog_data = []
+        #self.analog_data = [32*collections.deque(self.fifo_size*[0], self.fifo_size)]
+        # Init plot data container
+        for i in range(NUM_CHANNELS):
+            self.analog_data.append(collections.deque(self.fifo_size*[0], self.fifo_size))
+        # Buffer for reading from file device.
+        self.data_buf = ""
 
         self.connect("destroy", self.on_destroy)
 
@@ -235,33 +245,32 @@ class ChessAnalogWindow(Gtk.Window):
         for i in range(32):
             self.liststore.append([str(i), 0])
 
-        treeview = Gtk.TreeView(model=self.liststore)
+        self.treeview = Gtk.TreeView(model=self.liststore)
         
         chan_text = Gtk.CellRendererText()
         column_text = Gtk.TreeViewColumn("Channel", chan_text, text=0)
-        treeview.append_column(column_text)
+        self.treeview.append_column(column_text)
 
         meas_text = Gtk.CellRendererText()
         mcolumn_text = Gtk.TreeViewColumn("Measurement", meas_text, text=1)
-        treeview.append_column(mcolumn_text)
+        self.treeview.append_column(mcolumn_text)
 
         self.master_vbox.pack_start(self.master_hbox, True, True, 0)
         #self.add(treeview)
-        self.master_hbox.pack_start(treeview, False, False, 0)
+        self.master_hbox.pack_start(self.treeview, False, False, 0)
 
         #self.liststore[31][1] = 18000
         #GObject.timeout_add(200, self.my_timer)
         self.timer_id = None
 
     def acquire_cb(self, state):
-        print("acq callback")
-        print(state)
+        #print("acq callback")
+        #print(state)
         if (self.action_acq.get_active()):
-            # Here we should try and read anything remaining in fd
-            # before starting another command? does comedi_cancel()
-            # clear the device?  
+            # This is commented because it seems that comedi_cancel()
+            # clears stale data in the fd and card?
             #data = os.read(self.fd, BUF_SIZE)
-            # print("LEN DATA: %d" % len(data))
+            #print("LEN DATA: %d" % len(data))
 
             # Start comedi command
             ret = c.comedi_command(self.dev, self.cmd)
@@ -271,7 +280,9 @@ class ChessAnalogWindow(Gtk.Window):
                 return(False)
 
             #self.timer_id = GObject.timeout_add(100, self.my_timer)
-            self.timer_id = GObject.timeout_add(100, self.pci_6033e_get_data)
+            # Make these timeouts configurable...
+            self.plot_id = GObject.timeout_add(500, self.num_data_timer)
+            self.timer_id = GObject.timeout_add(10, self.pci_6033e_get_data)
             self.action_acq.set_label("Halt")
         else:
             self.action_acq.set_label("Acquire")
@@ -279,12 +290,16 @@ class ChessAnalogWindow(Gtk.Window):
                 if (c.comedi_cancel(self.dev, SUBDEVICE) < 0):
                     print("failed to cancel comedi command...")
                 GObject.source_remove(self.timer_id)
+            if (self.plot_id):
+                GObject.source_remove(self.plot_id)
+            # Empty stale data
+            self.data_buf = ""
 
-    def my_timer(self):
-        #print("BUMP")
+    def num_data_timer(self):
+        # Print numerical data to treeview
         for i in range(32):
-            self.liststore[i][1] += 1
-            self.liststore[i][1] = self.liststore[i][1] % 65535
+            self.liststore[i][1] = self.analog_data[i][-1]
+            
         return(True)
 
     def pci_6033e_get_data(self):
@@ -310,19 +325,26 @@ class ChessAnalogWindow(Gtk.Window):
         else:
             # Read some data!
             data = os.read(self.fd, BUF_SIZE)
+            self.data_buf += data
 
         if (len(data) > 0):
             bytes_read = len(data)
-            print("Read %d bytes" % bytes_read)
-            #print("total read: %d" % bytes_read)
-            r = math.floor(len(data)/(self.comedi_num_chans*WORD_SIZE))
-            #print(r)
+            #print("Read %d bytes" % bytes_read)
+            # Number of rows of data in the chunk
+            r = math.floor(len(self.data_buf)/(self.comedi_num_chans*WORD_SIZE))
             for i in range(int(r)):
                 #print(len(data[64*i:64*(i+1)]))
-                data_tup = data_tup + struct.unpack(format, data[64*i:64*(i+1)])
-                print(data_tup)
-                data_tup = ()
-                print(len(data))
+                data_tup = data_tup + struct.unpack(format, self.data_buf[64*i:64*(i+1)])
+                #print(data_tup)
+                #data_tup = ()
+                #print(len(data))
+            
+            for n, point in enumerate(data_tup):
+                self.analog_data[n%self.comedi_num_chans].append(point)
+
+            self.data_buf = self.data_buf[len(data_tup*2):]
+            #print("LEFTOVER DATA:")
+            #print(len(self.data_buf))
 
         return(True)
 
