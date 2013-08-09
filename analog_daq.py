@@ -4,6 +4,7 @@ import select
 import struct
 import numpy as np
 import math
+import collections
 
 from gi.repository import Gtk, GObject
 
@@ -12,7 +13,7 @@ SUBDEVICE = 0
 # Buffer for reading the file device.
 BUF_SIZE = 10000
 # Scans of all 32 channels per second
-SCAN_FREQ = 1000
+SCAN_FREQ = 100
 # 2 bytes per word
 WORD_SIZE = 2
 # Channel we want to use for 0-5 V
@@ -256,11 +257,27 @@ class ChessAnalogWindow(Gtk.Window):
         print("acq callback")
         print(state)
         if (self.action_acq.get_active()):
-            self.timer_id = GObject.timeout_add(200, self.my_timer)
+            # Here we should try and read anything remaining in fd
+            # before starting another command? does comedi_cancel()
+            # clear the device?  
+            #data = os.read(self.fd, BUF_SIZE)
+            # print("LEN DATA: %d" % len(data))
+
+            # Start comedi command
+            ret = c.comedi_command(self.dev, self.cmd)
+            if (ret != 0):
+                self.warn_dialog("PCI-6033E cannot collect data! Error: %d" % ret)
+                print(c.comedi_strerror(c.comedi_errno()))
+                return(False)
+
+            #self.timer_id = GObject.timeout_add(100, self.my_timer)
+            self.timer_id = GObject.timeout_add(100, self.pci_6033e_get_data)
             self.action_acq.set_label("Halt")
         else:
             self.action_acq.set_label("Acquire")
             if (self.timer_id):
+                if (c.comedi_cancel(self.dev, SUBDEVICE) < 0):
+                    print("failed to cancel comedi command...")
                 GObject.source_remove(self.timer_id)
 
     def my_timer(self):
@@ -268,6 +285,45 @@ class ChessAnalogWindow(Gtk.Window):
         for i in range(32):
             self.liststore[i][1] += 1
             self.liststore[i][1] = self.liststore[i][1] % 65535
+        return(True)
+
+    def pci_6033e_get_data(self):
+        # Run the command
+        # ret = c.comedi_command(self.dev, self.cmd)
+        # if (ret != 0):
+        #     self.warn_dialog("PCI-6033E cannot collect data! Error: %d" % ret)
+        #     print(c.comedi_strerror(c.comedi_errno()))
+        #     return(False)
+            
+        data_tup = ()
+        data = ""
+        # Format string for struct.unpack()
+        format = '32H'
+
+        # See if we can read anything from fd (timeout 0.05 seconds).
+        ret = select.select([self.fd], [], [], 0.05)
+        if (not ret[0]):
+            # Poll the device to try and get some data.
+            cret = c.comedi_poll(self.dev, SUBDEVICE)
+            if (cret < 0):
+                print("comedi poll fail: %d" % ret)
+        else:
+            # Read some data!
+            data = os.read(self.fd, BUF_SIZE)
+
+        if (len(data) > 0):
+            bytes_read = len(data)
+            print("Read %d bytes" % bytes_read)
+            #print("total read: %d" % bytes_read)
+            r = math.floor(len(data)/(self.comedi_num_chans*WORD_SIZE))
+            #print(r)
+            for i in range(int(r)):
+                #print(len(data[64*i:64*(i+1)]))
+                data_tup = data_tup + struct.unpack(format, data[64*i:64*(i+1)])
+                print(data_tup)
+                data_tup = ()
+                print(len(data))
+
         return(True)
 
     def pci_6033e_init(self, dev_name):
@@ -302,45 +358,44 @@ class ChessAnalogWindow(Gtk.Window):
             print("Opened wrong device!")
         
         # Prepare channels, gains, refs
-        num_chans = NUM_CHANNELS
-        chans = range(num_chans)
-        gains = [0]*num_chans
-        aref = [c.AREF_GROUND]*num_chans
+        self.comedi_num_chans = NUM_CHANNELS
+        chans = range(self.comedi_num_chans)
+        gains = [0]*self.comedi_num_chans
+        aref = [c.AREF_GROUND]*self.comedi_num_chans
 
-        chan_list = c.chanlist(num_chans)
+        chan_list = c.chanlist(self.comedi_num_chans)
 
         # Configure all the channels!
-        for i in range(num_chans):
+        for i in range(self.comedi_num_chans):
             chan_list[i] = c.cr_pack(chans[i], gains[i], aref[i])
 
         # The comedi command
-        cmd = c.comedi_cmd_struct()
+        self.cmd = c.comedi_cmd_struct()
 
         # 1.0e9 because this number is in nanoseconds for some reason
         period = int(1.0e9/float(SCAN_FREQ))
 
         # Init cmd
-        ret = c.comedi_get_cmd_generic_timed(self.dev, SUBDEVICE, cmd, num_chans, period)
+        ret = c.comedi_get_cmd_generic_timed(self.dev, SUBDEVICE, self.cmd, self.comedi_num_chans, period)
         if (ret):
             self.warn_dialog("Could not initiate command")
             c.comedi_close(self.dev)
             return(-1)
 
         # Populate command 
-        cmd.chanlist = chan_list
-        cmd.chanlist_len = num_chans
-        cmd.scan_end_arg = num_chans
-        cmd.stop_src = c.TRIG_COUNT
-        # TODO, short runs for now...
-        cmd.stop_arg = 10
+        self.cmd.chanlist = chan_list
+        self.cmd.chanlist_len = self.comedi_num_chans
+        self.cmd.scan_end_arg = self.comedi_num_chans
+        self.cmd.stop_src = c.TRIG_NONE
+        self.cmd.stop_arg = 0
 
         #print("real timing: %d ns" % cmd.convert_arg)
         #print("period: %d ns" % period)
     
-        print_cmd(cmd)
+        print_cmd(self.cmd)
 
         # Test command out.
-        ret = c.comedi_command_test(self.dev, cmd)
+        ret = c.comedi_command_test(self.dev, self.cmd)
         if (ret < 0):
             self.warn_dialog("Comedi command test failed!")
             c.comedi_close(self.dev)
