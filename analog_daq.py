@@ -241,7 +241,7 @@ class ChessAnalogWindow(Gtk.Window):
         self.master_vbox.pack_start(toolbar, False, False, 0)
 
 
-        self.liststore = Gtk.ListStore(str, int)
+        self.liststore = Gtk.ListStore(str, float)
         for i in range(32):
             self.liststore.append([str(i), 0])
 
@@ -298,7 +298,10 @@ class ChessAnalogWindow(Gtk.Window):
     def num_data_timer(self):
         # Print numerical data to treeview
         for i in range(32):
-            self.liststore[i][1] = self.analog_data[i][-1]
+            #     datal.append(c.comedi_to_phys(j, crange, maxdata))
+            self.liststore[i][1] = c.comedi_to_phys(self.analog_data[i][-1], 
+                                                    self.comedi_range, 
+                                                    (self.comedi_maxdata + 1))
             
         return(True)
 
@@ -372,8 +375,8 @@ class ChessAnalogWindow(Gtk.Window):
             c.comedi_close(self.dev)
             return(-1)
 
-        comedi_range = c.comedi_get_range(self.dev, SUBDEVICE, 0, CHAN_RANGE)
-        comedi_maxdata = c.comedi_get_maxdata(self.dev, SUBDEVICE, 0)
+        self.comedi_range = c.comedi_get_range(self.dev, SUBDEVICE, 0, CHAN_RANGE)
+        self.comedi_maxdata = c.comedi_get_maxdata(self.dev, SUBDEVICE, 0)
 
         board_name = c.comedi_get_board_name(self.dev)
         if (board_name != "pci-6033e"):
