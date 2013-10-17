@@ -5,15 +5,30 @@ import struct
 import numpy as np
 import math
 import collections
+import itertools
 
-from gi.repository import Gtk, GObject
+
+
+#import matplotlib.animation as ma
+from matplotlib.figure import Figure
+#from matplotlib.backends.backend_gtk3cairo import FigureCanvasGTK3Cairo as FigureCanvas
+from matplotlib.backends.backend_gtk3agg import FigureCanvasGTK3Agg as FigureCanvas
+#from matplotlib.backends.backend_gtkagg import FigureCanvasGTKAgg as FigureCanvas
+#from matplotlib.backends.backend_gtk3 import NavigationToolbar2GTK3 as NavigationToolbar
+
+import matplotlib.pyplot
+print matplotlib.pyplot.get_backend()
+
+#import gtk
+from gi.repository import GObject, Gtk
+
 
 DEVICE = "/dev/comedi0"
 SUBDEVICE = 0
 # Buffer for reading the file device.
 BUF_SIZE = 10000
 # Scans of all 32 channels per second
-SCAN_FREQ = 1000
+SCAN_FREQ = 100
 # 2 bytes per word
 WORD_SIZE = 2
 # Channel we want to use for 0-5 V
@@ -30,150 +45,8 @@ UI_INFO = """
 """
 
 
-# def main(dev_name, num_chans):
-#     dev = c.comedi_open(dev_name)
-#     if not(dev):
-#         raise Exception("Unable to open device: " + dev_name)
 
-#     # get a file-descriptor for use later
-#     fd = c.comedi_fileno(dev)
-#     if (fd <= 0): 
-#         raise Exception("Error obtaining Comedi device file descriptor")
-
-#     crange = c.comedi_get_range(dev, SUBDEVICE, 0, CHAN_RANGE)
-#     maxdata = c.comedi_get_maxdata(dev, SUBDEVICE, 0)
-
-#     board_name = c.comedi_get_board_name(dev)
-#     if (board_name != "pci-6033e"):
-#         print("Opened wrong device!")
-    
-#     # Prepare channels, gains, refs
-#     chans = range(num_chans)
-#     gains = [0]*num_chans
-#     aref = [c.AREF_GROUND]*num_chans
-
-#     chan_list = c.chanlist(num_chans)
-
-#     # Configure all the channels!
-#     for i in range(num_chans):
-#         chan_list[i] = c.cr_pack(chans[i], gains[i], aref[i])
-
-#     # The comedi command
-#     cmd = c.comedi_cmd_struct()
-
-#     # 1.0e9 because this number is in nanoseconds for some reason
-#     period = int(1.0e9/float(SCAN_FREQ))
-
-#     # Init cmd
-#     ret = c.comedi_get_cmd_generic_timed(dev, SUBDEVICE, cmd, num_chans, period)
-#     if (ret):
-#         raise Exception("Could not initiate command")
-
-#     # Populate command 
-#     cmd.chanlist = chan_list
-#     cmd.chanlist_len = num_chans
-#     cmd.scan_end_arg = num_chans
-#     cmd.stop_src = c.TRIG_COUNT
-#     # TODO, short runs for now...
-#     cmd.stop_arg = 10
-
-#     #print("real timing: %d ns" % cmd.convert_arg)
-#     #print("period: %d ns" % period)
-    
-#     print_cmd(cmd)
-
-#     # Test command out.
-#     ret = c.comedi_command_test(dev, cmd)
-#     if (ret < 0):
-#         raise Exception("Command test failed!")
-
-#     print("Command test passed")
-
-#     # Run the command
-#     ret = c.comedi_command(dev, cmd)
-#     if (ret != 0):
-#         raise Exception("command run failed")
-
-#     datastr = ()
-#     l = []
-#     data = ""
-#     payload = ""
-#     bytes_read = 0
-#     num_reads = 0
-
-#     datal = []    
-#     #format = `n`+'H'
-#     format = '32H'
-    
-#     # Get the data.
-#     while (1):
-#         # ret = c.comedi_poll(dev, 0)
-#         # if (ret < 0):
-#         #     print("comedi poll fail: %d" % ret)
-#         ret = select.select([fd], [], [], 0.05)
-#         #print(ret[0])
-#         if (len(ret[0]) == 0):
-#             cret = c.comedi_poll(dev, SUBDEVICE)
-#             if (cret < 0):
-#                 print("comedi poll fail: %d" % ret)
-#         else:
-            
-#             data = os.read(fd, BUF_SIZE)
-#         #print(data)
-
-#         if (len(data) > 0):
-#             bytes_read += len(data)
-#             print("Read %d bytes" % len(data))
-#             #print("total read: %d" % bytes_read)
-#             r = math.floor(len(data)/(num_chans*WORD_SIZE))
-#             print(r)
-#             for i in range(int(r)):
-#                 #for j in range(num_chans):
-#                     #print(len(data))
-#                 print(len(data[64*i:64*(i+1)]))
-#                 datastr = datastr + struct.unpack(format, data[64*i:64*(i+1)])
-#                 # for j in datastr:
-#                 #     datal.append(c.comedi_to_phys(j, crange, maxdata))
-#                 print(datastr)
-#                 #print(datal)
-#                 datastr = ()
-#                 #datal = []
-#             payload += data
-#             num_reads += 1
-#         if (bytes_read >= 640):
-#                 break
-
-#             # print(type(data))
-#             # if (len(data) == 0):
-#             #     break
-#             # n = len(data)/2 # 2 bytes per 'H'
-#             # print(n)
-#             # format = `n`+'H'
-#             # #print(struct.unpack(format,data))
-#             # datastr = datastr + struct.unpack(format,data)
-#             # print(datastr)
-
-#     #print("payload: " + payload)
-#     print("payload len: %d" % len(payload))
-#     print("number of reads: %d" % num_reads)
-#     # print("data: ")
-#     # print("data len: %d" % len(datastr))
-#     # print(datastr)
-#     # print(type(datastr[0]))
-
-#     # print(maxdata)
-#     # for i in range(255):
-#     #     print(("%d  " % i) +  str(c.comedi_to_phys(i, crange, maxdata)))
-    
-#     # blah = os.read(fd, BUF_SIZE)
-#     # print("blah")
-#     # print(len(blah))
-    
-#     ret = c.comedi_close(dev)
-#     if (ret != 0):
-#         raise Exception("comedi_close failed...")
-
-
+# Helper function for showing command parameters
 def print_cmd(cmd):
 	print "---------------------------"
 	print "command structure contains:"
@@ -198,13 +71,14 @@ class ChessAnalogWindow(Gtk.Window):
 
         self.dev = None
         # number of plot points to plot at any one time.
-        self.fifo_size = 200
+        self.fifo_size = 1000
         # Buffer for plot data
         self.analog_data = []
         #self.analog_data = [32*collections.deque(self.fifo_size*[0], self.fifo_size)]
         # Init plot data container
         for i in range(NUM_CHANNELS):
             self.analog_data.append(collections.deque(self.fifo_size*[0], self.fifo_size))
+        self.x = collections.deque(self.fifo_size*[0], self.fifo_size)
         # Buffer for reading from file device.
         self.data_buf = ""
 
@@ -262,6 +136,61 @@ class ChessAnalogWindow(Gtk.Window):
         #self.liststore[31][1] = 18000
         #GObject.timeout_add(200, self.my_timer)
         self.timer_id = None
+        self.plot_id = None
+
+        self.f = Figure(figsize=(8,6), dpi=100)
+        self.a = self.f.add_subplot(111)
+        
+        #self.line, = self.a.plot([], [], marker = 'x')
+        #self.line, = self.a.plot([], [])
+        #self.plt = self.a.plot([0, 1], [0, 3], marker = 'x')
+        self.a.xaxis.set_animated(True)
+        self.a.yaxis.set_animated(True)
+
+        #self.a.set_xlim([0,5])
+        self.a.set_xlim([self.fifo_size/SCAN_FREQ, 0])
+        
+        self.a.set_ylim([0,70000])
+        
+        self.a.grid(True)
+        #self.a.set_xscale('log')
+        #self.a.set_xlim((10.0, 30000.0))
+        #self.a.set_ylim((-90.0, 3.0))
+        self.a.set_xlabel("Time")
+        self.a.set_ylabel("Voltage")
+
+        self.lastx = 0
+        self.my_line, = self.a.plot([], [], animated = True)
+        self.my_line2, = self.a.plot([], [], animated = True)
+        
+        self.canvas = FigureCanvas(self.f)
+
+        # Clean background
+        self.clean_bg = self.canvas.copy_from_bbox(self.f.bbox)
+        self.background = self.canvas.copy_from_bbox(self.get_bg_bbox(self.a))
+
+        self.old_size = self.a.bbox.width, self.a.bbox.height
+
+        self.canvas.draw()
+
+        self.do_redraw = False
+
+        #self.plot_timer = self.canvas.new_timer(interval = 42)
+
+        # self.anim = ma.FuncAnimation(self.f, 
+        #                              self.update_plots, 
+        #                              event_source = self.plot_timer, 
+        #                              init_func = self.init_blit_plot, 
+        #                              repeat = False,
+        #                              blit = True)
+
+        #print(dir(self.anim))
+        #self.anim._stop()
+        #self.plot_timer.stop()
+        self.master_hbox.pack_start(self.canvas, True, True, 0)
+        #self.plot_timer.stop()
+
+        self.connect("check-resize", self.win_resize)
 
     def acquire_cb(self, state):
         #print("acq callback")
@@ -279,10 +208,14 @@ class ChessAnalogWindow(Gtk.Window):
                 print(c.comedi_strerror(c.comedi_errno()))
                 return(False)
 
+
+
             #self.timer_id = GObject.timeout_add(100, self.my_timer)
             # Make these timeouts configurable...
+            self.plotter_id = GObject.timeout_add(250, self.update_plots)
             self.plot_id = GObject.timeout_add(500, self.num_data_timer)
-            self.timer_id = GObject.timeout_add(10, self.pci_6033e_get_data)
+            self.timer_id = GObject.timeout_add(20, self.pci_6033e_get_data)
+            #self.plot_timer.start()
             self.action_acq.set_label("Halt")
         else:
             self.action_acq.set_label("Acquire")
@@ -292,8 +225,18 @@ class ChessAnalogWindow(Gtk.Window):
                 GObject.source_remove(self.timer_id)
             if (self.plot_id):
                 GObject.source_remove(self.plot_id)
+            if (self.plotter_id):
+                GObject.source_remove(self.plotter_id)
+            #self.plot_timer.stop()
             # Empty stale data
             self.data_buf = ""
+            # print(self.x)
+            # print(self.analog_data[0])
+
+    # Get the bounding box
+    def get_bg_bbox(self, axe):
+        # just pad x0 by three....
+        return axe.bbox.padded(-3)
 
     def num_data_timer(self):
         # Print numerical data to treeview
@@ -344,6 +287,8 @@ class ChessAnalogWindow(Gtk.Window):
             
             for n, point in enumerate(data_tup):
                 self.analog_data[n%self.comedi_num_chans].append(point)
+            for i in range(int(r)):
+                self.x.append(self.x[-1] + 1.0/SCAN_FREQ)
 
             self.data_buf = self.data_buf[len(data_tup*2):]
             #print("LEFTOVER DATA:")
@@ -414,7 +359,8 @@ class ChessAnalogWindow(Gtk.Window):
         self.cmd.stop_src = c.TRIG_NONE
         self.cmd.stop_arg = 0
 
-        #print("real timing: %d ns" % cmd.convert_arg)
+        print("real timing: %d ns" % self.cmd.convert_arg)
+        print("Real scan freq: %d Hz" % (1.0/(float(self.cmd.convert_arg)*32.0*1.0e-9)))
         #print("period: %d ns" % period)
     
         print_cmd(self.cmd)
@@ -448,6 +394,93 @@ class ChessAnalogWindow(Gtk.Window):
         #     print "WARN dialog closed by clicking OK button"
 
         dialog.destroy()
+
+    def del_px_data(self, d_x):
+        xpx_old, ypx_old = self.a.transData.transform((0, 0))
+        xpx_new, ypx_new = self.a.transData.transform((d_x, 0))
+
+        return(xpx_new - xpx_old)
+
+    def update_plots(self):
+        if (self.do_redraw):
+            #print("redraw")
+            self.a.clear()
+            self.a.grid(True)
+            self.canvas.draw()
+            self.clean_bg = self.canvas.copy_from_bbox(self.f.bbox)
+            self.background = self.canvas.copy_from_bbox(self.get_bg_bbox(self.a))
+            self.do_redraw = False
+
+
+        self.a.set_xlim([self.x[-1] - self.fifo_size/SCAN_FREQ - 1, self.x[-1] + 1])
+        # Restore the blank background
+        self.canvas.restore_region(self.clean_bg)
+
+        xarr = np.array(self.x)
+        analog_arr = np.array(self.analog_data[0])
+        analog_arr2 = np.array(self.analog_data[18])
+
+        #lastx_ind = np.where(np.array(self.x) > self.lastx)
+        lastx_ind = np.where(xarr > self.lastx)
+        #lastx_ind = itertools.islice(self.lastx
+
+        #print(lastx_ind[0])
+        lastx_ind = lastx_ind[0]
+
+        # Offset in time
+        x_offset = abs(xarr[-1] - self.lastx)
+
+        # Find the equivalent offset in display pixels
+        pixel_offset = self.del_px_data(x_offset)
+        dx_pixel = np.floor(pixel_offset)
+
+
+        # Compute and redraw saved background (moved over).
+        x1, y1, x2, y2 = self.background.get_extents()
+        self.canvas.restore_region(self.background,
+                                   bbox = (x1 + dx_pixel, y1, x2, y2),
+                                   xy = (x1 - dx_pixel, y1))
+
+        
+        
+        # if (len(lastx_ind) > 0):
+        #     lastx_ind = np.array(itertools.islice(self.x, lastx_ind[0], self.fifo_size))
+        # else:
+        #     lastx_ind = np.array(self.x)
+        # #print(lastx_ind)
+
+        self.my_line.set_xdata(xarr[lastx_ind])
+        self.my_line.set_ydata(analog_arr[lastx_ind])
+        self.a.draw_artist(self.my_line)
+        #self.canvas.draw()
+        self.my_line2.set_xdata(xarr[lastx_ind])
+        self.my_line2.set_ydata(analog_arr2[lastx_ind])
+        self.a.draw_artist(self.my_line2)
+
+        
+        self.background = self.canvas.copy_from_bbox(self.get_bg_bbox(self.a))
+
+        # Draw the axes (and grids if applicable)
+        self.a.draw_artist(self.a.xaxis)
+        self.a.draw_artist(self.a.yaxis)
+        
+        self.canvas.blit(self.f.bbox)
+        self.lastx = self.x[-1]
+
+        #self.canvas.draw()
+        return(True)
+
+    # def init_blit_plot(self):
+    #     l = self.line.set_data([], [])
+    #     return(l)
+
+    def win_resize(self, win):
+        #print("RESIZE!")
+
+        # Don't do this here, instead activate a "needs redraw" class
+        # var that instructs update_plot to do a full redraw.
+
+        self.do_redraw = True
 
 
 if __name__ == '__main__':
