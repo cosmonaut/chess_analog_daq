@@ -30,7 +30,8 @@ WORD_SIZE = 2
 CHAN_RANGE = 8
 NUM_CHANNELS = 32
 # Size of reads from comedi file device
-FD_BUF_SIZE = 65536
+#FD_BUF_SIZE = 65536
+FD_BUF_SIZE = 262144
 
 
 class BlitPlot(FigureCanvas):
@@ -509,6 +510,9 @@ class AnalogCard:
         ms = c.comedi_get_max_buffer_size(self.dev, SUBDEVICE)
         print("buf size: %f" % bs)
         print("max buf size: %f" % ms)
+        if (ms > 0):
+            ms = c.comedi_set_buffer_size(self.dev, SUBDEVICE, ms)
+            print("Final analog device buffer size: %i" % ms)
             
         # get a file-descriptor for use later
         self.fd = c.comedi_fileno(self.dev)
