@@ -458,7 +458,10 @@ class AnalogDAQWindow(QtGui.QMainWindow):
         x, y = self.daq.get_last()
         for r in range(self.table.rowCount()):
             #self.table.item(r, 1).setText(str(5.0*y[r][-1]/65535.0))
-            self.table.item(r, 1).setText(str(self.dLUT[y[r]]))
+            #self.table.item(r, 1).setText(str(self.dLUT[y[r]]).format("%0.2f"))
+            self.table.item(r, 1).setText(("%0.2f" % self.dLUT[y[r]]))
+            #self.table.item(r, 1).setText(("%0.2f" % y[r]))
+
 
     def update_plots(self):
         #x, y = self.daq.get_batch()
