@@ -9,7 +9,7 @@ import numpy as np
 
 import comedi as c
 
-from PyQt4 import QtGui, QtCore
+from PyQt4 import QtGui, QtCore, Qt
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
@@ -340,7 +340,170 @@ class BlitPlot(FigureCanvas):
         
         #self.lastx = xarr[-1]
 
+class StripPrefWidget(QtGui.QWidget):
+    def __init__(self, line_number):
+        super(StripPrefWidget, self).__init__()
+
+        grid = QtGui.QGridLayout()
+
+        line_n = int(line_number)
+        self.check = QtGui.QCheckBox('Line %i' % line_n, self)
+        self.check.stateChanged.connect(self.set_check_state)
         
+        self.combo = QtGui.QComboBox(self)
+        self.combo.addItem("0")
+        self.combo.addItem("1")
+        self.combo.addItem("2")
+        self.combo.addItem("3")
+        self.combo.addItem("4")
+        self.combo.currentIndexChanged.connect(self.set_strip_index)
+
+        button = QtGui.QPushButton("LUT File")
+
+        button.clicked.connect(self.show_file_dialog)
+
+        self.label = QtGui.QLabel("Default")
+
+
+        grid.addWidget(self.check, 0, 0)
+        grid.addWidget(self.combo, 0, 1)
+        grid.addWidget(button, 0, 2)
+        grid.addWidget(self.label, 0, 3)
+
+
+        self.setLayout(grid)
+
+        self.lut_file = ""
+        self.line_n = line_n
+        self.display = False
+        self.plot_number = 0
+
+
+    def show_file_dialog(self):
+        fname = QtGui.QFileDialog.getOpenFileName(self, "LUT File", '/home')
+        #print(fname)
+        #print(os.path.split(str(fname)))
+
+        self.label.setText(os.path.split(str(fname))[-1])
+        if os.path.exists(str(fname)):
+            self.lut_file = str(fname)
+            #print(self.lut_file)
+
+
+    def set_strip_index(self, index):
+        #print(index)
+        self.plot_number = int(index)
+        
+    def set_check_state(self, state):
+        #print(state)
+        #print(bool(state))
+        self.display = bool(state)
+
+    def update_check(self, state):
+        self.display = bool(state)
+        self.check.setChecked(state)
+
+    def update_lut(self, lut_file):
+        self.label.setText(os.path.split(str(lut_file))[-1])
+        if os.path.exists(str(lut_file)):
+            self.lut_file = str(lut_file)
+
+    def update_combo(self, plot_ind):
+        self.combo.setCurrentIndex(int(plot_ind))
+        self.plot_number = int(plot_ind)
+
+    def get_params(self):
+        return([self.line_n, self.display, self.plot_number, self.lut_file])
+
+class AnalogConfigDialog(QtGui.QDialog):
+    def __init__(self, parent, cur_conf, def_conf):
+        QtGui.QDialog.__init__(self, parent)
+        #print(def_conf)
+        if (len(def_conf) != 32):
+            print("BAD DEFAULT CONF")
+        # Default config map
+        self.def_conf = def_conf
+
+        self.params = []
+
+        self.setWindowTitle("Analog GUI Preferences")
+
+        # Grid Sector 23-B6-1
+        grid = QtGui.QGridLayout()
+
+        self.strip_w = []
+        for i in range(32):
+            self.strip_w.append(StripPrefWidget(i))
+            grid.addWidget(self.strip_w[i], i, 0)
+            #print(self.strip_w[i].get_params())
+            
+        if (len(cur_conf) == 32):
+            self.load_settings(cur_conf)
+
+        # Layout for pref buttons
+        minigrid = QtGui.QGridLayout()
+
+        self.save_button = QtGui.QPushButton("Save Settings")
+        self.def_button = QtGui.QPushButton("Load Defaults")
+        self.cancel_button = QtGui.QPushButton("Cancel")
+
+        self.def_button.clicked.connect(self.load_defaults)
+        self.cancel_button.clicked.connect(self.close)
+        self.save_button.clicked.connect(self.save_and_close)
+
+        minigrid.addWidget(self.save_button, 0, 0)
+        minigrid.addWidget(self.def_button, 0, 1)
+        minigrid.addWidget(self.cancel_button, 0, 2)
+
+        grid.addLayout(minigrid, 32, 0)
+        #grid.addWidget(self.def_button, 32, 1)
+
+        grid.setSpacing(0)
+        grid.setContentsMargins(0, 0, 0, 0)
+
+        self.setLayout(grid)
+        #self.show()
+
+    def save_and_close(self):
+        # save params
+        del(self.params[:])
+        for i in range(32):
+            self.params.append(self.strip_w[i].get_params())
+
+        self.close()
+
+    def closeEvent(self, ce):
+        print("CLOSE")
+
+    def get_params(self):
+        # l = []
+        # for i in range(32):
+        #     l.append(self.strip_w[i].get_params())
+
+        # return(l)
+
+        if (len(self.params) == 32):
+            return(self.params)
+        else:
+            return[]
+
+    def load_defaults(self):
+        if (len(self.def_conf) != 32):
+            print("CAN'T LOAD DEFAULT CONF, BAD CONFIG")
+            return
+        else:
+            for k in self.def_conf.keys():
+                #print(k, self.def_conf[k])
+                self.strip_w[int(k)].update_check(self.def_conf[k]['display'])
+                self.strip_w[int(k)].update_lut(self.def_conf[k]['lut_file'])
+                self.strip_w[int(k)].update_combo(self.def_conf[k]['plot_num'])
+            
+    def load_settings(self, conf):
+        for k in conf.keys():
+            self.strip_w[int(k)].update_check(conf[k]['display'])
+            self.strip_w[int(k)].update_lut(conf[k]['lut_file'])
+            self.strip_w[int(k)].update_combo(conf[k]['plot_num'])
+
 
 class AnalogDAQWindow(QtGui.QMainWindow):
     def __init__(self):
@@ -348,12 +511,58 @@ class AnalogDAQWindow(QtGui.QMainWindow):
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
         self.setWindowTitle("CHESS Analog DAQ")
 
+        # Plot configuration settings
+        self.settings_map = dict()
+        self.def_settings_map = self.gen_default_settings()
+        self.lut_file_map = dict()
+        
+        self.settings = Qt.QSettings(Qt.QSettings.NativeFormat,
+                                     Qt.QSettings.UserScope,
+                                     "analog_daq",
+                                     "default",
+                                     self)
+
+        self.settings.sync()
+        #self.settings.setValue("asdf", ({"aaa": 444, 'ggg': True, 'qewr': 9.62367363},))
+        if (self.settings.status() != 0):
+            print("STATUS: %i" % self.settings.status())
+
+        #debug junk (DELETE ME LATER)
+        #print(self.settings.allKeys())
+        # for s in self.settings.allKeys():
+        #     #print(str(s))
+        #     a = self.settings.value(s).toPyObject()[0]
+
+        if (len(self.settings.allKeys()) != 32):
+            #generate default settings
+            print("BAD CONFIG FILE -- SAVING DEFAULT SETTINGS")
+            self.save_default_settings()
+            self.settings_map = self.def_settings_map
+        else:
+            # load settings!
+            for k in self.settings.allKeys():
+                #self.settings_map[k]
+                #"30": {'display': True, 'plot_num': 3, 'lut_file': ''},
+                self.settings_map[str(k)] = self.settings.value(k).toPyObject()[0]
+                #print(self.settings.value(k).toPyObject()[0])
+
+        #print("CURRENT SETTINGS: ")
+        #print(self.settings_map)
+
         self.plot = BlitPlot()
         self.plot.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
 
         self.daq = AnalogCard()
 
         self.main_widget = QtGui.QWidget(self)
+
+        self.menu = self.menuBar()
+        fmenu = self.menu.addMenu('&File')
+
+        pref_action = QtGui.QAction("&Preferences", self)
+        pref_action.triggered.connect(self.show_pref_dialog)
+
+        fmenu.addAction(pref_action)
 
         self.table = QtGui.QTableWidget(self)
         #self.table.setFlags(self.table.flags() ^ QtCore.ItemIsEditable)
@@ -471,6 +680,77 @@ class AnalogDAQWindow(QtGui.QMainWindow):
                 row[n] = self.dLUT[row[n]]
         self.plot.update_plots(x, y)
 
+    def show_pref_dialog(self):
+        #print("PREFERENCES!")
+        a = AnalogConfigDialog(self, self.settings_map, self.def_settings_map)
+        a.exec_()
+        param_list = a.get_params()
+        # params only exist if saved...
+        if (len(param_list) == 32):
+            #print(param_list)
+            print("SAVING NEW PARAMS")
+            for line in param_list:
+                self.settings_map[str(line[0])]['display'] = line[1]
+                self.settings_map[str(line[0])]['plot_num'] = line[2]
+                self.settings_map[str(line[0])]['lut_file'] = line[3]
+
+            self.save_settings()
+        #print("abbazabba")
+        
+    def gen_default_settings(self):
+        d = {"0": {'display': True, 'plot_num': 0, 'lut_file': ''},
+             "1": {'display': True, 'plot_num': 0, 'lut_file': ''},
+             "2": {'display': True, 'plot_num': 0, 'lut_file': ''},
+             "3": {'display': True, 'plot_num': 0, 'lut_file': ''},
+             "4": {'display': True, 'plot_num': 0, 'lut_file': ''},
+             "5": {'display': True, 'plot_num': 0, 'lut_file': ''},
+             "6": {'display': True, 'plot_num': 0, 'lut_file': ''},
+             "7": {'display': True, 'plot_num': 0, 'lut_file': ''},
+             "8": {'display': True, 'plot_num': 1, 'lut_file': ''},
+             "9": {'display': True, 'plot_num': 1, 'lut_file': ''},
+             "10": {'display': True, 'plot_num': 1, 'lut_file': ''},
+             "11": {'display': True, 'plot_num': 1, 'lut_file': ''},
+             "12": {'display': True, 'plot_num': 1, 'lut_file': ''},
+             "13": {'display': True, 'plot_num': 1, 'lut_file': ''},
+             "14": {'display': True, 'plot_num': 1, 'lut_file': ''},
+             "15": {'display': True, 'plot_num': 1, 'lut_file': ''},
+             "16": {'display': True, 'plot_num': 2, 'lut_file': ''},
+             "17": {'display': True, 'plot_num': 2, 'lut_file': ''},
+             "18": {'display': True, 'plot_num': 2, 'lut_file': ''},
+             "19": {'display': True, 'plot_num': 2, 'lut_file': ''},
+             "20": {'display': True, 'plot_num': 2, 'lut_file': ''},
+             "21": {'display': True, 'plot_num': 2, 'lut_file': ''},
+             "22": {'display': True, 'plot_num': 2, 'lut_file': ''},
+             "23": {'display': True, 'plot_num': 2, 'lut_file': ''},
+             "24": {'display': True, 'plot_num': 3, 'lut_file': ''},
+             "25": {'display': True, 'plot_num': 3, 'lut_file': ''},
+             "26": {'display': True, 'plot_num': 3, 'lut_file': ''},
+             "27": {'display': True, 'plot_num': 3, 'lut_file': ''},
+             "28": {'display': True, 'plot_num': 3, 'lut_file': ''},
+             "29": {'display': True, 'plot_num': 3, 'lut_file': ''},
+             "30": {'display': True, 'plot_num': 3, 'lut_file': ''},
+             "31": {'display': True, 'plot_num': 4, 'lut_file': ''}}
+
+        return(d)
+
+    def save_default_settings(self):
+        self.settings.clear()
+        self.settings.sync()
+        
+        for k in self.def_settings_map.keys():
+            #self.settings.setValue("asdf", ({"aaa": 444, 'ggg': True, 'qewr': 9.62367363},))
+            self.settings.setValue(k, (self.def_settings_map[k],))
+        self.settings.sync()
+
+    def save_settings(self):
+        self.settings.clear()
+        self.settings.sync()
+
+        for k in self.settings_map.keys():
+            self.settings.setValue(k, (self.settings_map[k],))
+
+        self.settings.sync()
+        
     def resizeEvent(self, evt = None):
         #print("RESIZE!")
         self.plot.redraw()
