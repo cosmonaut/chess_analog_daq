@@ -35,12 +35,17 @@ FD_BUF_SIZE = 262144
 
 
 class BlitPlot(FigureCanvas):
-    def __init__(self, parent = None):
+    def __init__(self, parent = None, line_map = None, disp_map = None):
         #super(BlitPlot, self).__init__()
         print("Init blitplot")
         self.fig = Figure()
         FigureCanvas.__init__(self, self.fig)
         self.canvas = self.fig.canvas
+
+        if (disp_map):
+            self.disp_map = disp_map
+        else:
+            self.disp_map = {i:True for i in range(32)}
 
         self.ax_list = []
         self.ax_list.append(self.fig.add_subplot(511))
@@ -68,14 +73,18 @@ class BlitPlot(FigureCanvas):
         
 
 
-            self.ax_list[n].set_xlabel("Time")
-            self.ax_list[n].set_ylabel("Voltage")
+            #self.ax_list[n].set_xlabel("Time")
+            #self.ax_list[n].set_ylabel("Voltage")
 
-        self.line_map = {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0,
-                         8:1, 9:1, 10:1, 11:1, 12:1, 13:1, 14:1,
-                         15:2, 16:2, 17:2, 18:2, 19:2, 20:2, 21:2,
-                         22:3, 23:3, 24:3, 25:3, 26:3, 27:3, 28:3,
-                         29:4, 30:4, 31:4}
+        if (self.validate_line_map(line_map)):
+            self.line_map = line_map
+        else:
+            print("Using default line map")
+            self.line_map = {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0,
+                             8:1, 9:1, 10:1, 11:1, 12:1, 13:1, 14:1,
+                             15:2, 16:2, 17:2, 18:2, 19:2, 20:2, 21:2,
+                             22:3, 23:3, 24:3, 25:3, 26:3, 27:3, 28:3,
+                             29:4, 30:4, 31:4}
 
         #print(self.line_map.items())
         self.ax_map = {v:k for k,v in self.line_map.items()}
@@ -145,6 +154,46 @@ class BlitPlot(FigureCanvas):
         self.setParent(parent)
         print("finish init blitplot")
 
+    def validate_line_map(self, line_map):
+        if (line_map):
+            if (len(line_map) == 32):
+                return(True)
+
+        return(False)
+
+    def set_line_map(self, new_line_map):
+        for i in range(32):
+            try:
+                self.line_list[i].remove()
+            except Exception:
+                print("BREAKAGE")
+
+            # print(i)
+            # print("lines: %i" % len(self.ax_list[self.line_map[i]].lines))
+            # try:
+            #     self.ax_list[self.line_map[i]].lines.remove(self.line_list[i])
+            # except Exception:
+            #     print("BREAKAGE %i %i" % (i, self.line_map[i]))
+            #     print(self.ax_list[self.line_map[i]].lines)
+            #     print(self.line_list[i])
+            # #print(self.line_list)
+        
+        if (self.validate_line_map(new_line_map)):
+            self.line_map = new_line_map
+        else:
+            print("NEW LINE MAP FAIL!")
+
+        del self.line_list[:]
+        #self.line_list = []
+
+        # bleh -- need a custom color cycle...
+        for i in range(32):
+            self.line_list.append((self.ax_list[self.line_map[i]].plot([], [], animated = True))[0])
+
+    def set_display_map(self, new_disp_map):
+        if (len(new_disp_map) == 32):
+            self.disp_map = new_disp_map
+    
     def redraw(self):
         self.do_redraw = True
         
@@ -169,7 +218,7 @@ class BlitPlot(FigureCanvas):
         
     def clear_plot(self):
         for n in range(len(self.ax_list)):
-            self.ax_list[n].clear()
+            #self.ax_list[n].clear()
             self.ax_list[n].grid(True)
             self.bg_list[n] = self.canvas.copy_from_bbox(self.get_bg_bbox(self.ax_list[n]))
 
@@ -186,7 +235,7 @@ class BlitPlot(FigureCanvas):
         
         if (self.do_redraw):
             for n in range(len(self.ax_list)):
-                self.ax_list[n].clear()
+                #self.ax_list[n].clear()
                 self.ax_list[n].grid(True)
                 
             self.canvas.draw()
@@ -286,10 +335,11 @@ class BlitPlot(FigureCanvas):
 
 
         for i in range(32):
-            self.line_list[i].set_xdata(xarr)
-            self.line_list[i].set_ydata(y[i])
-            #print(len(xarr), len(y[i]))
-            self.ax_list[self.line_map[i]].draw_artist(self.line_list[i])
+            if (self.disp_map[i]):
+                self.line_list[i].set_xdata(xarr)
+                self.line_list[i].set_ydata(y[i])
+                #print(len(xarr), len(y[i]))
+                self.ax_list[self.line_map[i]].draw_artist(self.line_list[i])
 
         #self.v_line.set_xdata(xarr[lastx_ind])
         #self.v_line.set_ydata(analog_arr[lastx_ind])
@@ -447,15 +497,20 @@ class AnalogConfigDialog(QtGui.QDialog):
         self.def_button = QtGui.QPushButton("Load Defaults")
         self.cancel_button = QtGui.QPushButton("Cancel")
 
+        self.check_all = QtGui.QCheckBox("Select All")
+
         self.def_button.clicked.connect(self.load_defaults)
         self.cancel_button.clicked.connect(self.close)
         self.save_button.clicked.connect(self.save_and_close)
+
+        self.check_all.toggled.connect(self.do_check_all)
 
         minigrid.addWidget(self.save_button, 0, 0)
         minigrid.addWidget(self.def_button, 0, 1)
         minigrid.addWidget(self.cancel_button, 0, 2)
 
-        grid.addLayout(minigrid, 32, 0)
+        grid.addWidget(self.check_all, 32, 0)
+        grid.addLayout(minigrid, 33, 0)
         #grid.addWidget(self.def_button, 32, 1)
 
         grid.setSpacing(0)
@@ -474,6 +529,10 @@ class AnalogConfigDialog(QtGui.QDialog):
 
     def closeEvent(self, ce):
         print("CLOSE")
+
+    def do_check_all(self, state):
+        for w in self.strip_w:
+            w.update_check(state)
 
     def get_params(self):
         # l = []
@@ -515,6 +574,8 @@ class AnalogDAQWindow(QtGui.QMainWindow):
         self.settings_map = dict()
         self.def_settings_map = self.gen_default_settings()
         self.lut_file_map = dict()
+        self.line_map = dict()
+        self.disp_map = dict()
         
         self.settings = Qt.QSettings(Qt.QSettings.NativeFormat,
                                      Qt.QSettings.UserScope,
@@ -546,10 +607,13 @@ class AnalogDAQWindow(QtGui.QMainWindow):
                 self.settings_map[str(k)] = self.settings.value(k).toPyObject()[0]
                 #print(self.settings.value(k).toPyObject()[0])
 
-        #print("CURRENT SETTINGS: ")
-        #print(self.settings_map)
+        # Now that we have settings, populate line map and lut map
+        for k in self.settings_map.keys():
+            self.line_map[int(k)] = self.settings_map[k]['plot_num']
+            self.disp_map[int(k)] = self.settings_map[k]['display']
+        
 
-        self.plot = BlitPlot()
+        self.plot = BlitPlot(line_map = self.line_map, disp_map = self.disp_map)
         self.plot.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
 
         self.daq = AnalogCard()
@@ -695,7 +759,11 @@ class AnalogDAQWindow(QtGui.QMainWindow):
                 self.settings_map[str(line[0])]['lut_file'] = line[3]
 
             self.save_settings()
-        #print("abbazabba")
+            for k in self.settings_map.keys():
+                self.line_map[int(k)] = self.settings_map[k]['plot_num']
+                self.disp_map[int(k)] = self.settings_map[k]['display']
+            self.plot.set_line_map(self.line_map)
+            self.plot.set_display_map(self.disp_map)
         
     def gen_default_settings(self):
         d = {"0": {'display': True, 'plot_num': 0, 'lut_file': ''},
