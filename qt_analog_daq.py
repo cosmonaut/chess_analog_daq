@@ -437,6 +437,8 @@ class StripPrefWidget(QtGui.QWidget):
         self.label.setText(os.path.split(str(fname))[-1])
         if os.path.exists(str(fname)):
             self.lut_file = str(fname)
+        else:
+            self.lut_file = ''
             #print(self.lut_file)
 
 
@@ -574,6 +576,7 @@ class AnalogDAQWindow(QtGui.QMainWindow):
         self.settings_map = dict()
         self.def_settings_map = self.gen_default_settings()
         self.lut_file_map = dict()
+        self.lut_map = dict()
         self.line_map = dict()
         self.disp_map = dict()
         
@@ -611,7 +614,47 @@ class AnalogDAQWindow(QtGui.QMainWindow):
         for k in self.settings_map.keys():
             self.line_map[int(k)] = self.settings_map[k]['plot_num']
             self.disp_map[int(k)] = self.settings_map[k]['display']
+            self.lut_file_map[int(k)] = self.settings_map[k]['lut_file']
+
+        # Default LUT
+        LUT = []
+        for i in range(65536):
+            LUT.append([i, 5.0*(i/65535.0)])
+        LUT = np.array(LUT)
+        self.dLUT = dict((key, value) for (key, value) in LUT)
+
+        # Process LUT files
+        self.loaded_lut_map = dict()
         
+        print("Processing LUTs")
+        for k in self.lut_file_map.keys():
+            if (self.lut_file_map[k]):
+                if os.path.exists(self.lut_file_map[k]):
+                    print(self.lut_file_map[k])
+                    # This prevents reloading identical LUTs
+                    if (self.lut_file_map[k] in self.loaded_lut_map):
+                        self.lut_map[int(k)] = self.lut_map[self.loaded_lut_map[self.lut_file_map[k]]]
+                    else:
+                        arr = np.genfromtxt(self.lut_file_map[k])
+                        if (len(arr) == 65536):
+                            #print(arr)
+                            d = dict()
+                            for n, val in enumerate(arr):
+                                d[n] = val
+                            self.lut_map[int(k)] = d
+                            self.loaded_lut_map[self.lut_file_map[k]] = int(k)
+                            #print(self.lut_map)
+                        else:
+                            print("WARNING: malformed LUT, using default LUT: %s" % self.lut_file_map[k])
+                            # Use default LUT
+                            self.lut_map[int(k)] = self.dLUT
+                else:
+                    print("LUT FILE LOAD ERROR! %s" % self.lut_file_map[k])
+                    
+            else:
+                # Load default LUT
+                self.lut_map[int(k)] = self.dLUT
+            
 
         self.plot = BlitPlot(line_map = self.line_map, disp_map = self.disp_map)
         self.plot.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
@@ -701,11 +744,6 @@ class AnalogDAQWindow(QtGui.QMainWindow):
         self.main_widget.setFocus()
         self.setCentralWidget(self.main_widget)
 
-        LUT = []
-        for i in range(65536):
-            LUT.append([i, 5.0*(i/65535.0)])
-        LUT = np.array(LUT)
-        self.dLUT = dict((key, value) for (key, value) in LUT)
 
                         
         self.statusBar().showMessage("CHESS Analog DAQ Initialized")
@@ -732,7 +770,11 @@ class AnalogDAQWindow(QtGui.QMainWindow):
         for r in range(self.table.rowCount()):
             #self.table.item(r, 1).setText(str(5.0*y[r][-1]/65535.0))
             #self.table.item(r, 1).setText(str(self.dLUT[y[r]]).format("%0.2f"))
-            self.table.item(r, 1).setText(("%0.2f" % self.dLUT[y[r]]))
+            #self.table.item(r, 1).setText(("%0.2f" % self.dLUT[y[r]]))
+
+            # This will need some work...
+            self.table.item(r, 1).setText(("%0.2f" % self.lut_map[r][y[r]]))
+            
             #self.table.item(r, 1).setText(("%0.2f" % y[r]))
 
 
@@ -741,6 +783,7 @@ class AnalogDAQWindow(QtGui.QMainWindow):
         x, y = self.daq.get_new()
         for row in y:
             for n in range(len(row)):
+                # Update to non-default lut when luts are complete
                 row[n] = self.dLUT[row[n]]
         self.plot.update_plots(x, y)
 
@@ -757,6 +800,7 @@ class AnalogDAQWindow(QtGui.QMainWindow):
                 self.settings_map[str(line[0])]['display'] = line[1]
                 self.settings_map[str(line[0])]['plot_num'] = line[2]
                 self.settings_map[str(line[0])]['lut_file'] = line[3]
+                #print(line[3])
 
             self.save_settings()
             for k in self.settings_map.keys():
