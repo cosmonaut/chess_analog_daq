@@ -33,6 +33,9 @@ NUM_CHANNELS = 32
 #FD_BUF_SIZE = 65536
 FD_BUF_SIZE = 262144
 
+# Non-ugly color cycle...
+COLOR_CYCLE = ['#E24A33', '#348ABD', '#988ED5', '#777777', '#FBC15E', '#8EBA42', '#FFB5B8']
+
 
 class BlitPlot(FigureCanvas):
     def __init__(self, parent = None, line_map = None, disp_map = None):
@@ -65,13 +68,30 @@ class BlitPlot(FigureCanvas):
             self.ax_list[n].yaxis.set_animated(True)
 
             self.ax_list[n].set_xlim([1000.0/SCAN_FREQ, 0])
-            self.ax_list[n].set_ylim([-0.4, 5.4])
+            # Set different limits for axes
+            if (n == 0):
+                # Volts
+                self.ax_list[n].set_ylim([-1.0, 30.0])
+            elif (n == 1):
+                # Amps
+                self.ax_list[n].set_ylim([-0.1, 2.5])
+            elif (n == 3):
+                # Temperature (C)
+                self.ax_list[n].set_ylim([-5.0, 110.0])
+            elif (n == 4):
+                # Pressure (Torr)
+                self.ax_list[n].set_yscale('log')
+                self.ax_list[n].set_ylim([1.0e-8, 700])
+            else:
+                self.ax_list[n].set_ylim([-0.4, 5.4])
             #self.ax_list[n].set_ylim([0, 70000])
+
+            self.ax_list[n].yaxis.set_tick_params(labelright = True)
+
+            #self.ax_list[n].legend(loc='center left', bbox_to_anchor=(1, 0.8))
 
             self.ax_list[n].grid(True)
             self.ax_list[n].xaxis.set_ticks_position('none')
-        
-
 
             #self.ax_list[n].set_xlabel("Time")
             #self.ax_list[n].set_ylabel("Voltage")
@@ -89,19 +109,28 @@ class BlitPlot(FigureCanvas):
         #print(self.line_map.items())
         self.ax_map = {v:k for k,v in self.line_map.items()}
         #print(self.ax_map)
-            
+        self.cc_l = [0, 0, 0, 0, 0]
+
         self.line_list = []
         for i in range(32):
-            #print(self.line_map[i])
-            self.line_list.append((self.ax_list[self.line_map[i]].plot([], [], animated = True))[0])
-
-        self.fig.subplots_adjust(left = 0.1, right = 0.95, top = 0.95, bottom = 0.05)
+            #print(len(self.ax_list[self.line_map[i]].lines))
+            if (self.disp_map[i]):
+                line_color = COLOR_CYCLE[self.cc_l[self.line_map[i]] % 7]
+                self.cc_l[self.line_map[i]] = (self.cc_l[self.line_map[i]] + 1) % 7
+                
+                #line_color = COLOR_CYCLE[(len(self.ax_list[self.line_map[i]].lines)) % len(COLOR_CYCLE)]
+                self.line_list.append((self.ax_list[self.line_map[i]].plot([], [], color = line_color, lw = 1.5, animated = True, label = str(i)))[0])
+            else:
+                self.line_list.append((self.ax_list[self.line_map[i]].plot([], [], animated = True))[0])
+                
+        self.fig.subplots_adjust(left = 0.05, right = 0.90, top = 0.95, bottom = 0.05)
         #self.fig.tight_layout()
         # self.v_line, = self.ax_list[0].plot([], [], animated = True)
         # self.i_line, = self.ax_list[1].plot([], [], animated = True)
         # self.vac_line, = self.ax_list[2].plot([], [], animated = True)
         
-
+        for n in range(len(self.ax_list)):
+            self.ax_list[n].legend(loc='center left', bbox_to_anchor=(1.02, 0.5), prop={'size':10})
         
         # self.axes.xaxis.set_animated(True)
         # self.axes.yaxis.set_animated(True)
@@ -186,9 +215,21 @@ class BlitPlot(FigureCanvas):
         del self.line_list[:]
         #self.line_list = []
 
-        # bleh -- need a custom color cycle...
+        #self.cc_l = [0, 0, 0, 0, 0]
+        for n in range(len(self.cc_l)):
+            self.cc_l[n] = 0
+
         for i in range(32):
-            self.line_list.append((self.ax_list[self.line_map[i]].plot([], [], animated = True))[0])
+            if (self.disp_map[i]):
+                #print(len(self.ax_list[self.line_map[i]].lines))
+                line_color = COLOR_CYCLE[self.cc_l[self.line_map[i]] % 7]
+                self.cc_l[self.line_map[i]] = (self.cc_l[self.line_map[i]] + 1) % 7
+
+                #line_color = COLOR_CYCLE[(len(self.ax_list[self.line_map[i]].lines)) % len(COLOR_CYCLE)]
+                self.line_list.append((self.ax_list[self.line_map[i]].plot([], [], color = line_color, lw = 1.5, animated = True, label = str(i)))[0])
+            else:
+                self.line_list.append((self.ax_list[self.line_map[i]].plot([], [], animated = True))[0])
+                
 
     def set_display_map(self, new_disp_map):
         if (len(new_disp_map) == 32):
@@ -773,7 +814,10 @@ class AnalogDAQWindow(QtGui.QMainWindow):
             #self.table.item(r, 1).setText(("%0.2f" % self.dLUT[y[r]]))
 
             # This will need some work...
-            self.table.item(r, 1).setText(("%0.2f" % self.lut_map[r][y[r]]))
+            if (abs(self.lut_map[r][y[r]]) > 0.01):
+                self.table.item(r, 1).setText(("%0.2f" % self.lut_map[r][y[r]]))
+            else:
+                self.table.item(r, 1).setText(("%0.2g" % self.lut_map[r][y[r]]))
             
             #self.table.item(r, 1).setText(("%0.2f" % y[r]))
 
@@ -781,10 +825,11 @@ class AnalogDAQWindow(QtGui.QMainWindow):
     def update_plots(self):
         #x, y = self.daq.get_batch()
         x, y = self.daq.get_new()
-        for row in y:
+        for row_n, row in enumerate(y):
             for n in range(len(row)):
                 # Update to non-default lut when luts are complete
-                row[n] = self.dLUT[row[n]]
+                #row[n] = self.dLUT[row[n]]
+                row[n] = self.lut_map[row_n][row[n]]
         self.plot.update_plots(x, y)
 
     def show_pref_dialog(self):
@@ -800,14 +845,16 @@ class AnalogDAQWindow(QtGui.QMainWindow):
                 self.settings_map[str(line[0])]['display'] = line[1]
                 self.settings_map[str(line[0])]['plot_num'] = line[2]
                 self.settings_map[str(line[0])]['lut_file'] = line[3]
+                # TODO Update lut file action...
                 #print(line[3])
 
             self.save_settings()
             for k in self.settings_map.keys():
                 self.line_map[int(k)] = self.settings_map[k]['plot_num']
                 self.disp_map[int(k)] = self.settings_map[k]['display']
-            self.plot.set_line_map(self.line_map)
             self.plot.set_display_map(self.disp_map)
+            self.plot.set_line_map(self.line_map)
+
         
     def gen_default_settings(self):
         d = {"0": {'display': True, 'plot_num': 0, 'lut_file': ''},

@@ -9,12 +9,21 @@ def myfunc(x):
     return(val)
     #return(p)
 
+# Thermistors
+def temp(x):
+    vol = 5.0*(x/65535.0)
+    f = -40.5433*vol + 216.4608
+    c = (f - 32.0)*(5.0/9.0)
+
+    return(c)
+
 
 def main(fname):
     z = np.array(range(65536))
     y = np.zeros(65536)
     for x in z:
-        y[x] = myfunc(x)
+        #y[x] = myfunc(x)
+        y[x] = temp(x)
 
     print(y)
 
