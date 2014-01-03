@@ -458,14 +458,16 @@ class StripPrefWidget(QtGui.QWidget):
 
         button.clicked.connect(self.show_file_dialog)
 
-        self.label = QtGui.QLabel("Default")
+        self.label = QtGui.QLabel("Default", self)
 
+        self.chname = QtGui.QLineEdit("", self)
+        self.chname.setSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
 
         grid.addWidget(self.check, 0, 0)
-        grid.addWidget(self.combo, 0, 1)
-        grid.addWidget(button, 0, 2)
-        grid.addWidget(self.label, 0, 3)
-
+        grid.addWidget(self.chname, 0, 1)        
+        grid.addWidget(self.combo, 0, 2)
+        grid.addWidget(button, 0, 3)
+        grid.addWidget(self.label, 0, 4)
 
         self.setLayout(grid)
 
@@ -473,6 +475,7 @@ class StripPrefWidget(QtGui.QWidget):
         self.line_n = line_n
         self.display = False
         self.plot_number = 0
+        self.chan_name = ""
 
 
     def show_file_dialog(self):
@@ -486,7 +489,6 @@ class StripPrefWidget(QtGui.QWidget):
         else:
             self.lut_file = ''
             #print(self.lut_file)
-
 
     def set_strip_index(self, index):
         #print(index)
@@ -510,8 +512,13 @@ class StripPrefWidget(QtGui.QWidget):
         self.combo.setCurrentIndex(int(plot_ind))
         self.plot_number = int(plot_ind)
 
+    def update_chname(self, chname):
+        self.chname.setText(chname)
+        self.chan_name = str(chname)
+
     def get_params(self):
-        return([self.line_n, self.display, self.plot_number, self.lut_file])
+        self.chan_name = str(self.chname.text())
+        return([self.line_n, self.display, self.plot_number, self.lut_file, self.chan_name])
 
 class AnalogConfigDialog(QtGui.QDialog):
     def __init__(self, parent, cur_conf, def_conf):
@@ -604,12 +611,14 @@ class AnalogConfigDialog(QtGui.QDialog):
                 self.strip_w[int(k)].update_check(self.def_conf[k]['display'])
                 self.strip_w[int(k)].update_lut(self.def_conf[k]['lut_file'])
                 self.strip_w[int(k)].update_combo(self.def_conf[k]['plot_num'])
+                self.strip_w[int(k)].update_chname(self.def_conf[k]['chname'])
             
     def load_settings(self, conf):
         for k in conf.keys():
             self.strip_w[int(k)].update_check(conf[k]['display'])
             self.strip_w[int(k)].update_lut(conf[k]['lut_file'])
             self.strip_w[int(k)].update_combo(conf[k]['plot_num'])
+            self.strip_w[int(k)].update_chname(conf[k]['chname'])
 
 
 class AnalogDAQWindow(QtGui.QMainWindow):
@@ -625,6 +634,7 @@ class AnalogDAQWindow(QtGui.QMainWindow):
         self.lut_map = dict()
         self.line_map = dict()
         self.disp_map = dict()
+        self.chname_map = dict()
         
         self.settings = Qt.QSettings(Qt.QSettings.NativeFormat,
                                      Qt.QSettings.UserScope,
@@ -661,6 +671,7 @@ class AnalogDAQWindow(QtGui.QMainWindow):
             self.line_map[int(k)] = self.settings_map[k]['plot_num']
             self.disp_map[int(k)] = self.settings_map[k]['display']
             self.lut_file_map[int(k)] = self.settings_map[k]['lut_file']
+            self.chname_map[int(k)] = self.settings_map[k]['chname']
 
         # Default LUT
         LUT = []
@@ -720,19 +731,21 @@ class AnalogDAQWindow(QtGui.QMainWindow):
         self.table = QtGui.QTableWidget(self)
         #self.table.setFlags(self.table.flags() ^ QtCore.ItemIsEditable)
         self.table.setRowCount(32)
-        self.table.setColumnCount(2)
+        self.table.setColumnCount(3)
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setVisible(False)
         self.table.setStyleSheet("QTableWidget::item { border: 0px; padding: 0px }")
 
         
         for r in range(self.table.rowCount()):
-            self.table.setItem(r, 0, QtGui.QTableWidgetItem("Channel %d" % r))
-            #temp_item.setFlags(QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled)
+            self.table.setItem(r, 0, QtGui.QTableWidgetItem("%d" % r))
             self.table.item(r, 0).setFlags(QtCore.Qt.ItemIsEnabled)
 
-            self.table.setItem(r, 1, QtGui.QTableWidgetItem("0.0"))
+            self.table.setItem(r, 1, QtGui.QTableWidgetItem(self.chname_map[r]))
             self.table.item(r, 1).setFlags(QtCore.Qt.ItemIsEnabled)
+
+            self.table.setItem(r, 2, QtGui.QTableWidgetItem("0.0"))
+            self.table.item(r, 2).setFlags(QtCore.Qt.ItemIsEnabled)
             
             # for c in range(self.table.columnCount()):
             #     #print("ASDF")
@@ -743,9 +756,11 @@ class AnalogDAQWindow(QtGui.QMainWindow):
 
 
         self.table.resizeRowsToContents()
+        # Resize channel number column.
+        self.table.resizeColumnToContents(0)
         self.table.setSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum)
         #self.table.setMaximumWidth(222)
-        w = self.table.columnWidth(0) + self.table.columnWidth(1)
+        w = self.table.columnWidth(0) + self.table.columnWidth(1) + self.table.columnWidth(2)
         #print(w)
         self.table.setMinimumWidth(w+10)
         self.table.setMaximumWidth(w+10)
@@ -826,9 +841,9 @@ class AnalogDAQWindow(QtGui.QMainWindow):
 
             # This will need some work...
             if (abs(self.lut_map[r][y[r]]) > 0.01):
-                self.table.item(r, 1).setText(("%0.2f" % self.lut_map[r][y[r]]))
+                self.table.item(r, 2).setText(("%0.2f" % self.lut_map[r][y[r]]))
             else:
-                self.table.item(r, 1).setText(("%0.2e" % self.lut_map[r][y[r]]))
+                self.table.item(r, 2).setText(("%0.2e" % self.lut_map[r][y[r]]))
             
             #self.table.item(r, 1).setText(("%0.2f" % y[r]))
 
@@ -856,6 +871,7 @@ class AnalogDAQWindow(QtGui.QMainWindow):
                 self.settings_map[str(line[0])]['display'] = line[1]
                 self.settings_map[str(line[0])]['plot_num'] = line[2]
                 self.settings_map[str(line[0])]['lut_file'] = line[3]
+                self.settings_map[str(line[0])]['chname'] = line[4]
                 # TODO Update lut file action...
                 #print(line[3])
 
@@ -863,43 +879,45 @@ class AnalogDAQWindow(QtGui.QMainWindow):
             for k in self.settings_map.keys():
                 self.line_map[int(k)] = self.settings_map[k]['plot_num']
                 self.disp_map[int(k)] = self.settings_map[k]['display']
+                self.chname_map[int(k)] = self.settings_map[k]['chname']
+                self.table.setItem(int(k), 1, QtGui.QTableWidgetItem(self.chname_map[int(k)]))
             self.plot.set_display_map(self.disp_map)
             self.plot.set_line_map(self.line_map)
 
         
     def gen_default_settings(self):
-        d = {"0": {'display': True, 'plot_num': 0, 'lut_file': ''},
-             "1": {'display': True, 'plot_num': 0, 'lut_file': ''},
-             "2": {'display': True, 'plot_num': 0, 'lut_file': ''},
-             "3": {'display': True, 'plot_num': 0, 'lut_file': ''},
-             "4": {'display': True, 'plot_num': 0, 'lut_file': ''},
-             "5": {'display': True, 'plot_num': 0, 'lut_file': ''},
-             "6": {'display': True, 'plot_num': 0, 'lut_file': ''},
-             "7": {'display': True, 'plot_num': 0, 'lut_file': ''},
-             "8": {'display': True, 'plot_num': 1, 'lut_file': ''},
-             "9": {'display': True, 'plot_num': 1, 'lut_file': ''},
-             "10": {'display': True, 'plot_num': 1, 'lut_file': ''},
-             "11": {'display': True, 'plot_num': 1, 'lut_file': ''},
-             "12": {'display': True, 'plot_num': 1, 'lut_file': ''},
-             "13": {'display': True, 'plot_num': 1, 'lut_file': ''},
-             "14": {'display': True, 'plot_num': 1, 'lut_file': ''},
-             "15": {'display': True, 'plot_num': 1, 'lut_file': ''},
-             "16": {'display': True, 'plot_num': 2, 'lut_file': ''},
-             "17": {'display': True, 'plot_num': 2, 'lut_file': ''},
-             "18": {'display': True, 'plot_num': 2, 'lut_file': ''},
-             "19": {'display': True, 'plot_num': 2, 'lut_file': ''},
-             "20": {'display': True, 'plot_num': 2, 'lut_file': ''},
-             "21": {'display': True, 'plot_num': 2, 'lut_file': ''},
-             "22": {'display': True, 'plot_num': 2, 'lut_file': ''},
-             "23": {'display': True, 'plot_num': 2, 'lut_file': ''},
-             "24": {'display': True, 'plot_num': 3, 'lut_file': ''},
-             "25": {'display': True, 'plot_num': 3, 'lut_file': ''},
-             "26": {'display': True, 'plot_num': 3, 'lut_file': ''},
-             "27": {'display': True, 'plot_num': 3, 'lut_file': ''},
-             "28": {'display': True, 'plot_num': 3, 'lut_file': ''},
-             "29": {'display': True, 'plot_num': 3, 'lut_file': ''},
-             "30": {'display': True, 'plot_num': 3, 'lut_file': ''},
-             "31": {'display': True, 'plot_num': 4, 'lut_file': ''}}
+        d = {"0": {'display': True, 'plot_num': 0, 'lut_file': '', 'chname': ""},
+             "1": {'display': True, 'plot_num': 0, 'lut_file': '', 'chname': ""},
+             "2": {'display': True, 'plot_num': 0, 'lut_file': '', 'chname': ""},
+             "3": {'display': True, 'plot_num': 0, 'lut_file': '', 'chname': ""},
+             "4": {'display': True, 'plot_num': 0, 'lut_file': '', 'chname': ""},
+             "5": {'display': True, 'plot_num': 0, 'lut_file': '', 'chname': ""},
+             "6": {'display': True, 'plot_num': 0, 'lut_file': '', 'chname': ""},
+             "7": {'display': True, 'plot_num': 0, 'lut_file': '', 'chname': ""},
+             "8": {'display': True, 'plot_num': 1, 'lut_file': '', 'chname': ""},
+             "9": {'display': True, 'plot_num': 1, 'lut_file': '', 'chname': ""},
+             "10": {'display': True, 'plot_num': 1, 'lut_file': '', 'chname': ""},
+             "11": {'display': True, 'plot_num': 1, 'lut_file': '', 'chname': ""},
+             "12": {'display': True, 'plot_num': 1, 'lut_file': '', 'chname': ""},
+             "13": {'display': True, 'plot_num': 1, 'lut_file': '', 'chname': ""},
+             "14": {'display': True, 'plot_num': 1, 'lut_file': '', 'chname': ""},
+             "15": {'display': True, 'plot_num': 1, 'lut_file': '', 'chname': ""},
+             "16": {'display': True, 'plot_num': 2, 'lut_file': '', 'chname': ""},
+             "17": {'display': True, 'plot_num': 2, 'lut_file': '', 'chname': ""},
+             "18": {'display': True, 'plot_num': 2, 'lut_file': '', 'chname': ""},
+             "19": {'display': True, 'plot_num': 2, 'lut_file': '', 'chname': ""},
+             "20": {'display': True, 'plot_num': 2, 'lut_file': '', 'chname': ""},
+             "21": {'display': True, 'plot_num': 2, 'lut_file': '', 'chname': ""},
+             "22": {'display': True, 'plot_num': 2, 'lut_file': '', 'chname': ""},
+             "23": {'display': True, 'plot_num': 2, 'lut_file': '', 'chname': ""},
+             "24": {'display': True, 'plot_num': 3, 'lut_file': '', 'chname': ""},
+             "25": {'display': True, 'plot_num': 3, 'lut_file': '', 'chname': ""},
+             "26": {'display': True, 'plot_num': 3, 'lut_file': '', 'chname': ""},
+             "27": {'display': True, 'plot_num': 3, 'lut_file': '', 'chname': ""},
+             "28": {'display': True, 'plot_num': 3, 'lut_file': '', 'chname': ""},
+             "29": {'display': True, 'plot_num': 3, 'lut_file': '', 'chname': ""},
+             "30": {'display': True, 'plot_num': 3, 'lut_file': '', 'chname': ""},
+             "31": {'display': True, 'plot_num': 4, 'lut_file': '', 'chname': ""}}
 
         return(d)
 
