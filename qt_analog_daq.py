@@ -810,7 +810,6 @@ class AnalogDAQWindow(QtGui.QMainWindow):
 
             # Allow pref
             self.pref_action.setEnabled(True)
-            print("NO ACQ!")
 
     def update_numbers(self):
         #x, y = self.daq.get_batch()
