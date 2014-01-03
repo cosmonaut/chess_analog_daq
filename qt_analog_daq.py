@@ -72,18 +72,23 @@ class BlitPlot(FigureCanvas):
             if (n == 0):
                 # Volts
                 self.ax_list[n].set_ylim([-1.0, 30.0])
+                self.ax_list[n].set_ylabel("Volts")
             elif (n == 1):
                 # Amps
                 self.ax_list[n].set_ylim([-0.1, 2.5])
+                self.ax_list[n].set_ylabel("Amperes")
             elif (n == 3):
                 # Temperature (C)
                 self.ax_list[n].set_ylim([-5.0, 110.0])
+                self.ax_list[n].set_ylabel("Celsius")
             elif (n == 4):
                 # Pressure (Torr)
                 self.ax_list[n].set_yscale('log')
-                self.ax_list[n].set_ylim([1.0e-8, 700])
+                self.ax_list[n].set_ylim([5.0e-7, 700])
+                self.ax_list[n].set_ylabel("Torr")
             else:
                 self.ax_list[n].set_ylim([-0.4, 5.4])
+                self.ax_list[n].set_ylabel("Volts")
             #self.ax_list[n].set_ylim([0, 70000])
 
             self.ax_list[n].yaxis.set_tick_params(labelright = True)
@@ -823,7 +828,7 @@ class AnalogDAQWindow(QtGui.QMainWindow):
             if (abs(self.lut_map[r][y[r]]) > 0.01):
                 self.table.item(r, 1).setText(("%0.2f" % self.lut_map[r][y[r]]))
             else:
-                self.table.item(r, 1).setText(("%0.2g" % self.lut_map[r][y[r]]))
+                self.table.item(r, 1).setText(("%0.2e" % self.lut_map[r][y[r]]))
             
             #self.table.item(r, 1).setText(("%0.2f" % y[r]))
 
