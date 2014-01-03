@@ -707,10 +707,10 @@ class AnalogDAQWindow(QtGui.QMainWindow):
         self.menu = self.menuBar()
         fmenu = self.menu.addMenu('&File')
 
-        pref_action = QtGui.QAction("&Preferences", self)
-        pref_action.triggered.connect(self.show_pref_dialog)
+        self.pref_action = QtGui.QAction("&Preferences", self)
+        self.pref_action.triggered.connect(self.show_pref_dialog)
 
-        fmenu.addAction(pref_action)
+        fmenu.addAction(self.pref_action)
 
         self.table = QtGui.QTableWidget(self)
         #self.table.setFlags(self.table.flags() ^ QtCore.ItemIsEditable)
@@ -791,6 +791,9 @@ class AnalogDAQWindow(QtGui.QMainWindow):
 
     def acquire(self, pressed):
         if pressed:
+            # disallow pref button
+            self.pref_action.setEnabled(False)
+            
             self.daq.start()
             self.acq_timer.start()
             self.num_disp_timer.start()
@@ -804,6 +807,10 @@ class AnalogDAQWindow(QtGui.QMainWindow):
             self.acq_timer.stop()
             self.daq.stop()
             self.acq_button.setText("Acquire")
+
+            # Allow pref
+            self.pref_action.setEnabled(True)
+            print("NO ACQ!")
 
     def update_numbers(self):
         #x, y = self.daq.get_batch()
@@ -915,6 +922,10 @@ class AnalogDAQWindow(QtGui.QMainWindow):
         self.plot.redraw()
         
     def closeEvent(self, ce):
+        # Stop acq
+        self.acq_button.setChecked(False)
+        self.acquire(False)
+        
         # Close DAQ card
         self.daq.stop()
         self.daq.close()
