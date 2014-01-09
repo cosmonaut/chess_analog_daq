@@ -5,6 +5,7 @@ import collections
 import math
 import struct
 import re
+import datetime
 import numpy as np
 
 import comedi as c
@@ -621,6 +622,66 @@ class AnalogConfigDialog(QtGui.QDialog):
             self.strip_w[int(k)].update_chname(conf[k]['chname'])
 
 
+class GUIConfigDialog(QtGui.QDialog):
+    def __init__(self, parent, cur_conf, def_conf):
+        QtGui.QDialog.__init__(self, parent)
+        #print(def_conf)
+        if (len(def_conf) != 1):
+            print("BAD DEFAULT CONF")
+        # Default config map
+        self.def_conf = def_conf
+
+        self.params = []
+
+        self.setWindowTitle("Analog GUI Configuration")
+
+        # Grid Sector 23-B6-1
+        grid = QtGui.QGridLayout()
+
+        self.log = QtGui.QCheckBox("Enable Logging", self)
+        if (cur_conf[0]):
+            self.log.setChecked(True)
+        else:
+            self.log.setChecked(False)
+
+        grid.addWidget(self.log, 0, 0)
+
+        grid.setSpacing(0)
+        grid.setContentsMargins(0, 0, 0, 0)
+
+        # Layout for pref buttons
+        minigrid = QtGui.QGridLayout()
+
+        self.save_button = QtGui.QPushButton("Save Settings")
+        self.def_button = QtGui.QPushButton("Load Defaults")
+        self.cancel_button = QtGui.QPushButton("Cancel")
+
+        self.def_button.clicked.connect(self.load_defaults)
+        self.cancel_button.clicked.connect(self.close)
+        self.save_button.clicked.connect(self.save_and_close)
+
+        minigrid.addWidget(self.save_button, 0, 0)
+        minigrid.addWidget(self.def_button, 0, 1)
+        minigrid.addWidget(self.cancel_button, 0, 2)
+
+        grid.addLayout(minigrid, 1, 0)
+
+        self.setLayout(grid)
+
+    def load_defaults(self):
+        self.log.setChecked(self.def_conf[0])
+
+    def save_and_close(self):
+        del(self.params[:])
+        for i in range(1):
+            self.params.append(self.log.isChecked())
+
+        #print(self.params)
+        self.close()
+
+    def get_params(self):
+        return(self.params)
+
 class AnalogDAQWindow(QtGui.QMainWindow):
     def __init__(self):
         QtGui.QMainWindow.__init__(self)
@@ -635,6 +696,9 @@ class AnalogDAQWindow(QtGui.QMainWindow):
         self.line_map = dict()
         self.disp_map = dict()
         self.chname_map = dict()
+
+        #self.gui_settings_map = dict()
+        #self.def_gui_settings_map = {"log" : True}
         
         self.settings = Qt.QSettings(Qt.QSettings.NativeFormat,
                                      Qt.QSettings.UserScope,
@@ -643,9 +707,6 @@ class AnalogDAQWindow(QtGui.QMainWindow):
                                      self)
 
         self.settings.sync()
-        #self.settings.setValue("asdf", ({"aaa": 444, 'ggg': True, 'qewr': 9.62367363},))
-        if (self.settings.status() != 0):
-            print("STATUS: %i" % self.settings.status())
 
         #debug junk (DELETE ME LATER)
         #print(self.settings.allKeys())
@@ -653,18 +714,29 @@ class AnalogDAQWindow(QtGui.QMainWindow):
         #     #print(str(s))
         #     a = self.settings.value(s).toPyObject()[0]
 
-        if (len(self.settings.allKeys()) != 32):
+        #if (len(self.settings.allKeys()) != 32):
+        #if (False):
+        if (len(self.settings.childKeys()) != 32):
             #generate default settings
             print("BAD CONFIG FILE -- SAVING DEFAULT SETTINGS")
-            self.save_default_settings()
-            self.settings_map = self.def_settings_map
+            #self.save_default_settings()
+            #self.settings_map = self.def_settings_map
         else:
             # load settings!
-            for k in self.settings.allKeys():
-                #self.settings_map[k]
-                #"30": {'display': True, 'plot_num': 3, 'lut_file': ''},
+            #for k in self.settings.allKeys():
+            for k in self.settings.childKeys():
                 self.settings_map[str(k)] = self.settings.value(k).toPyObject()[0]
                 #print(self.settings.value(k).toPyObject()[0])
+
+        # Retrieve GUI settings
+        self.settings.beginGroup("GUI")
+        #print(self.settings.value("log").toPyObject()[0])
+        self.logging = self.settings.value("log").toPyObject()[0]
+        self.log_file = ""
+        # File descriptor...
+        self.f = None
+        #print("LOGGING: %i" % self.logging)
+        self.settings.endGroup()
 
         # Now that we have settings, populate line map and lut map
         for k in self.settings_map.keys():
@@ -727,6 +799,11 @@ class AnalogDAQWindow(QtGui.QMainWindow):
         self.pref_action.triggered.connect(self.show_pref_dialog)
 
         fmenu.addAction(self.pref_action)
+
+        self.config_action = QtGui.QAction("&Configuration", self)
+        self.config_action.triggered.connect(self.show_config_dialog)
+
+        fmenu.addAction(self.config_action)
 
         self.table = QtGui.QTableWidget(self)
         #self.table.setFlags(self.table.flags() ^ QtCore.ItemIsEditable)
@@ -811,8 +888,38 @@ class AnalogDAQWindow(QtGui.QMainWindow):
 
     def acquire(self, pressed):
         if pressed:
-            # disallow pref button
+            # disallow pref/conf buttons
             self.pref_action.setEnabled(False)
+            self.config_action.setEnabled(False)
+
+            if (self.logging):
+                # timestamp filename!
+                dt = datetime.datetime.now()
+                date_string = dt.strftime("%Y-%m-%d-%H:%M:%S.%f") + "_analog.log"
+                #date_string = datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S.%f") + "_analog.log"
+                #print(date_string)
+                if (self.f):
+                    try:
+                        self.f.close()
+                    except:
+                        print("log file glitch?")
+                    
+                self.f = open(date_string, 'wb')
+                # Write Header Info!
+                self.f.write(struct.pack('H', SCAN_FREQ))
+                # Write log start timestamp
+                self.f.write(struct.pack('H', dt.year))
+                self.f.write(struct.pack('H', dt.month))
+                self.f.write(struct.pack('H', dt.day))
+                self.f.write(struct.pack('H', dt.hour))
+                self.f.write(struct.pack('H', dt.minute))
+                self.f.write(struct.pack('H', dt.second))
+                self.f.write(struct.pack('H', int(round(dt.microsecond/1000.0))))
+
+                # Remaining 24 header words are 0
+                #self.f.write(struct.pack('31H', *([0]*31)))
+                self.f.write(struct.pack('24H', *([0]*24)))
+                             
             
             self.daq.start()
             self.acq_timer.start()
@@ -828,8 +935,14 @@ class AnalogDAQWindow(QtGui.QMainWindow):
             self.daq.stop()
             self.acq_button.setText("Acquire")
 
-            # Allow pref
+            if (self.logging):
+                # close file
+                if (self.f):
+                    self.f.close()
+
+            # Allow pref/conf
             self.pref_action.setEnabled(True)
+            self.config_action.setEnabled(True)
 
     def update_numbers(self):
         #x, y = self.daq.get_batch()
@@ -850,7 +963,10 @@ class AnalogDAQWindow(QtGui.QMainWindow):
 
     def update_plots(self):
         #x, y = self.daq.get_batch()
-        x, y = self.daq.get_new()
+        bin_blob, x, y = self.daq.get_new()
+        if (self.logging):
+            self.f.write(bin_blob)
+            
         for row_n, row in enumerate(y):
             for n in range(len(row)):
                 # Update to non-default lut when luts are complete
@@ -883,6 +999,18 @@ class AnalogDAQWindow(QtGui.QMainWindow):
                 self.table.setItem(int(k), 1, QtGui.QTableWidgetItem(self.chname_map[int(k)]))
             self.plot.set_display_map(self.disp_map)
             self.plot.set_line_map(self.line_map)
+
+
+    def show_config_dialog(self):
+        #print("PREFERENCES!")
+        a = GUIConfigDialog(self, [self.logging], [False])
+        a.exec_()
+
+        param_list = a.get_params()
+        if (len(param_list) == 1):
+            self.logging = param_list[0]
+
+        self.save_settings()
 
         
     def gen_default_settings(self):
@@ -937,6 +1065,10 @@ class AnalogDAQWindow(QtGui.QMainWindow):
         for k in self.settings_map.keys():
             self.settings.setValue(k, (self.settings_map[k],))
 
+        self.settings.beginGroup("GUI")
+        self.settings.setValue("log", (self.logging,))
+        self.settings.endGroup()
+
         self.settings.sync()
         
     def resizeEvent(self, evt = None):
@@ -947,6 +1079,12 @@ class AnalogDAQWindow(QtGui.QMainWindow):
         # Stop acq
         self.acq_button.setChecked(False)
         self.acquire(False)
+
+        if (self.f):
+            try:
+                self.f.close()
+            except:
+                print("failed to close log file...")
         
         # Close DAQ card
         self.daq.stop()
@@ -1051,6 +1189,7 @@ class AnalogCard:
         self.fifo_size = BUF_SIZE
         # String buffer for comedi data acq
         self.data_buf = ""
+        self.data_new = ""
         self.analog_data = []
         for i in range(NUM_CHANNELS):
             self.analog_data.append(collections.deque([], self.fifo_size))
@@ -1120,7 +1259,9 @@ class AnalogCard:
 
             for i in range(32):
                 self.last_analog[i] = self.analog_data[i][-1]
-                
+
+            self.data_new += self.data_buf[0:len(data_tup*2)]
+            #print(len(self.data_new))
             self.data_buf = self.data_buf[len(data_tup*2):]
             #print("LEFTOVER DATA:")
             #print(len(self.data_buf))
@@ -1144,7 +1285,10 @@ class AnalogCard:
         for i in range(32):
             y.append(list(self.analog_data[i]))
             self.analog_data[i].clear()
-        return(x, y)
+        n = self.data_new
+        self.data_new = ""
+        return(n, x, y)
+    
 
     # Start actual hardware acquistion
     def start(self):
